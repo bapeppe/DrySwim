@@ -20,13 +20,13 @@ npm start
 
 ## Uso
 
-- **Panoramica**: programma consigliato, calendario della settimana, riepilogo e ultima sessione. Il consiglio ruota per giorno; non sostituisce l’assegnazione dell’allenatore.
-- **Esercizi**: 52 record unici che coprono tutte le 55 voci originarie. Scapular Push-up, Plank Shoulder Taps e Hollow Body Hold hanno due categorie. Ricerca, filtri cumulativi, ordine alfabetico e preferiti persistenti.
-- **Allenamenti**: tre programmi con riscaldamento, due giri, recuperi e defaticamento. Prima di iniziare, l’atleta conferma di aver concordato il programma con l’allenatore.
-- **Player**: un movimento alla volta, conferma delle serie a ripetizioni, conto alla rovescia per le tenute, recuperi automatici, pausa, salti, ritorno alla fase precedente, interruzione e riepilogo. Il countdown bilaterale include entrambi i lati e indica quando cambiare. Le tre posizioni Y-T-W sono esplicite.
-- **Progressi**: solo risultati salvati; sessioni interrotte nello storico ma escluse dal conteggio degli allenamenti completati. Nessuna classifica o dato dimostrativo.
+- **Home**: un solo programma in evidenza, il pulsante per aprirlo e la settimana. Se esiste una sessione in corso, l’azione principale diventa Riprendi. Il consiglio ruota per giorno; non sostituisce l’assegnazione dell’allenatore.
+- **Esercizi**: ricerca e preferiti subito disponibili; filtri per categoria, difficoltà, muscoli e occorrente nel pannello Filtri. 52 record unici che coprono tutte le 55 voci originarie. Scapular Push-up, Plank Shoulder Taps e Hollow Body Hold hanno due categorie. Ricerca, filtri cumulativi, ordine alfabetico e preferiti persistenti.
+- **Allenati**: tre programmi con riscaldamento, due giri, recuperi e defaticamento. La schermata programma mette preparazione e pulsante di avvio prima dell’elenco esercizi. L’atleta conferma l’accordo con l’allenatore e avvia direttamente il timer, senza schermate di avvio ripetute.
+- **Player**: tre fasi riconoscibili (Riscaldamento, Esercizi, Recupero finale), pulsante Ho finito per le ripetizioni e Pausa/Riprendi. Passaggi, varianti e video si aprono su richiesta; precedente, salto e interruzione sono in Altre opzioni. Un movimento alla volta, conferma delle serie a ripetizioni, conto alla rovescia per le tenute, recuperi automatici, pausa, salti, ritorno alla fase precedente, interruzione e riepilogo. Il countdown bilaterale include entrambi i lati e indica quando cambiare. Le tre posizioni Y-T-W sono esplicite.
+- **Progressi**: riepilogo e storico in primo piano; grafici e calendario si aprono su richiesta dopo il primo risultato. Solo risultati salvati; sessioni interrotte nello storico ma escluse dal conteggio degli allenamenti completati. Nessuna classifica o dato dimostrativo.
 - **Spazio allenatore**: modalità locale, creazione/modifica/duplicazione/eliminazione di programmi e personalizzazione dei modelli. Riordino accessibile tramite pulsanti su/giù. Serie, lati, posizioni, dosi, ritmo, giri, recuperi e fasi modificabili. Per aggiungere una scheda al builder, aprila in modalità allenatore.
-- **Preferenze**: tema, livello, suoni, modalità locale ed esportazione JSON. I dati non sono sincronizzati. La separazione atleta/allenatore non è autenticazione e non protegge l’accesso.
+- **Impostazioni**: raggiungibili anche da smartphone nell’intestazione; tema, livello, suoni, modalità locale, spazio allenatore ed esportazione JSON. I dati non sono sincronizzati. La separazione atleta/allenatore non è autenticazione e non protegge l’accesso.
 
 La durata è la somma delle fasi: ripetizioni × secondi/ripetizione × lati × posizioni × serie × giri, oppure secondi × lati × posizioni per le tenute. Ogni recupero include 8 secondi di cambio posizione; non è aggiunto un recupero extra prima del defaticamento. La durata reale dipende dalle pause e dal ritmo.
 
@@ -44,6 +44,7 @@ src/data/videos.ts       Registro centralizzato dei video verificati
 src/lib/models.ts        Modelli TypeScript e schemi Zod
 src/lib/workouts.ts      Filtri, dosi, calendario, espansione e stime
 src/lib/player.ts        Motore puro di avanzamento e timer
+src/lib/guidance.ts      Istruzioni progressive del riscaldamento
 src/lib/storage.ts       Persistenza validata e gestione errori
 src/state/store.ts       Stato applicativo Zustand
 public/                  Icone e service worker
@@ -54,6 +55,8 @@ tests/                   Test del dominio e test browser responsive
 ## Esercizi e contenuti
 
 Aggiungere una riga in `src/data/exercises.ts`: ID e slug stabili, nome, categoria, dose, muscoli, tre istruzioni specifiche, errori, varianti e attrezzatura. I record finali vengono validati da Zod. Per categorie multiple aggiungere l’associazione allo stesso record, senza duplicarlo. I dosaggi sono proposte iniziali modificabili: per gli intervalli originari si usa un valore rappresentativo, da adattare con l’allenatore. Aggiornare i test del numero di esercizi quando il catalogo cambia intenzionalmente.
+
+I programmi predefiniti mostrano un movimento del riscaldamento alla volta, in base al tempo rimanente: le indicazioni sono in `src/lib/guidance.ts`. Le durate restano quelle del programma. I programmi personalizzati mantengono le istruzioni scritte dall’allenatore.
 
 Gli esercizi unilaterali usano `dose.sides: 2`; le circonduzioni hanno due direzioni; Y-T-W usa `dose.positions: 3`. Non moltiplicare nuovamente le ripetizioni per lato nel builder.
 

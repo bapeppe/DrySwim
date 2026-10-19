@@ -1,53 +1,44 @@
 'use client';
+
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowUpRight, Heart, Search, SlidersHorizontal, ExternalLink } from 'lucide-react';
+import { ArrowRight, Heart, Search, SlidersHorizontal } from 'lucide-react';
 import { exercises } from '@/data/exercises';
 import { categories, difficultyLabels, type Exercise } from '@/lib/models';
 import { doseLabel, filterExercises } from '@/lib/workouts';
 import { useStore } from '@/state/store';
-import { CategoryArt } from './visuals';
+
 export function ExerciseCard({ exercise: e }: { exercise: Exercise }) {
   const { favorites, toggleFavorite } = useStore();
   return (
     <article className="exercise-card">
-      <div className="exercise-image">
-        <Link href={`/esercizi/${e.slug}`} aria-label={`Guarda ${e.name}`}>
-          <CategoryArt category={e.categories[0]} />
-        </Link>
-        <button
-          className={`favorite ${favorites.includes(e.id) ? 'selected' : ''}`}
-          aria-label={`${favorites.includes(e.id) ? 'Rimuovi dai' : 'Aggiungi ai'} preferiti: ${e.name}`}
-          aria-pressed={favorites.includes(e.id)}
-          onClick={() => toggleFavorite(e.id)}
-        >
-          <Heart size={19} fill={favorites.includes(e.id) ? 'currentColor' : 'none'} />
-        </button>
-        <span className="exercise-video-label">
-          <ExternalLink size={12} />
-          {e.youtubeVideoId ? 'Video disponibile' : 'Ricerca video'}
-        </span>
-      </div>
       <div className="exercise-card-body">
-        <div className="exercise-tags">
-          <span className="eyebrow" style={{ color: categories[e.categories[0]].color }}>
-            {e.categories.map((c) => categories[c].short).join(' · ')}
-          </span>
-          <span className="tag">{difficultyLabels[e.difficulty]}</span>
-        </div>
         <h3>
           <Link href={`/esercizi/${e.slug}`}>{e.name}</Link>
         </h3>
-        <p>{e.muscleGroups.join(' · ')}</p>
-        <div className="exercise-card-footer">
-          <span>
-            {e.defaultSets} serie · {doseLabel(e.dose)}
-          </span>
-          <Link href={`/esercizi/${e.slug}`} aria-label={`Guarda esercizio ${e.name}`}>
-            <ArrowUpRight size={20} />
-          </Link>
-        </div>
+        <p>
+          {e.categories.map((c) => categories[c].short).join(' · ')}
+          <span className="level-separator"> · </span>
+          {difficultyLabels[e.difficulty]}
+        </p>
+        <span className="exercise-dose">{doseLabel(e.dose, e.id)}</span>
+        <Link
+          className="text-link"
+          href={`/esercizi/${e.slug}`}
+          aria-label={`Guarda esercizio ${e.name}`}
+        >
+          Come si fa
+          <ArrowRight size={17} />
+        </Link>
       </div>
+      <button
+        className={`favorite ${favorites.includes(e.id) ? 'selected' : ''}`}
+        aria-label={`${favorites.includes(e.id) ? 'Rimuovi dai' : 'Aggiungi ai'} preferiti: ${e.name}`}
+        aria-pressed={favorites.includes(e.id)}
+        onClick={() => toggleFavorite(e.id)}
+      >
+        <Heart size={21} fill={favorites.includes(e.id) ? 'currentColor' : 'none'} />
+      </button>
     </article>
   );
 }
@@ -58,6 +49,7 @@ export function ExerciseLibrary() {
     [muscle, setMuscle] = useState(''),
     [equipment, setEquipment] = useState(''),
     [onlyFavorites, setOnlyFavorites] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const favorites = useStore((s) => s.favorites);
   const filtered = filterExercises(
     query,
@@ -67,29 +59,34 @@ export function ExerciseLibrary() {
     equipment,
     onlyFavorites ? favorites : undefined,
   );
+  const filterCount = [category, difficulty, muscle, equipment].filter(Boolean).length;
+  const reset = () => {
+    setQuery('');
+    setCategory('');
+    setDifficulty('');
+    setMuscle('');
+    setEquipment('');
+    setOnlyFavorites(false);
+  };
   return (
     <>
       <div className="page-heading">
         <div>
-          <span className="eyebrow">LA TECNICA PRIMA DI TUTTO</span>
-          <h1>
-            La tua libreria<span className="teal">.</span>
-          </h1>
-          <p>Conosci ogni movimento. Trova la variante che fa per te.</p>
+          <h1>Esercizi</h1>
+          <p>Non conosci un movimento? Cerca qui come farlo.</p>
         </div>
-        <span className="count-badge">52 esercizi · 7 categorie</span>
       </div>
-      <div className="filter-panel panel">
-        <div className="search-row">
-          <label className="search-field">
-            <Search size={20} />
-            <input
-              aria-label="Cerca un esercizio"
-              placeholder="Cerca un esercizio…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </label>
+      <div className="library-search">
+        <label className="search-field">
+          <Search size={21} />
+          <input
+            aria-label="Cerca un esercizio"
+            placeholder="Cerca un esercizio"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </label>
+        <div className="library-tools">
           <button
             className={`btn ${onlyFavorites ? 'btn-primary' : 'btn-secondary'}`}
             aria-pressed={onlyFavorites}
@@ -98,57 +95,73 @@ export function ExerciseLibrary() {
             <Heart size={18} />
             Preferiti
           </button>
-        </div>
-        <div className="category-filters">
-          <button className={!category ? 'selected' : ''} onClick={() => setCategory('')}>
-            Tutti
+          <button
+            className={`btn ${showFilters || filterCount ? 'btn-primary' : 'btn-secondary'}`}
+            aria-expanded={showFilters}
+            aria-controls="exercise-filters"
+            onClick={() => setShowFilters(!showFilters)}
+          >
+            <SlidersHorizontal size={18} />
+            Filtri{filterCount > 0 ? ` (${filterCount})` : ''}
           </button>
-          {Object.entries(categories).map(([id, c]) => (
-            <button
-              className={category === id ? 'selected' : ''}
-              key={id}
-              onClick={() => setCategory(id)}
-            >
-              {c.short}
+          {filterCount > 0 && (
+            <button className="btn btn-ghost" onClick={reset}>
+              Azzera filtri
             </button>
-          ))}
-        </div>
-        <div className="filter-selects">
-          <SlidersHorizontal size={17} />
-          <label>
-            <span className="sr-only">Difficoltà</span>
-            <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
-              <option value="">Tutti i livelli</option>
-              {Object.entries(difficultyLabels).map(([id, label]) => (
-                <option key={id} value={id}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span className="sr-only">Gruppo muscolare</span>
-            <select value={muscle} onChange={(e) => setMuscle(e.target.value)}>
-              <option value="">Tutti i muscoli</option>
-              {[...new Set(exercises.flatMap((e) => e.muscleGroups))].sort().map((m) => (
-                <option key={m}>{m}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span className="sr-only">Attrezzatura</span>
-            <select value={equipment} onChange={(e) => setEquipment(e.target.value)}>
-              <option value="">Ogni attrezzatura</option>
-              {[...new Set(exercises.flatMap((e) => e.equipment))].sort().map((m) => (
-                <option key={m}>{m}</option>
-              ))}
-            </select>
-          </label>
-          <span className="filter-sort">Ordine: A → Z</span>
+          )}
         </div>
       </div>
+      {showFilters && (
+        <div id="exercise-filters" className="filter-panel panel">
+          <div className="filter-selects">
+            <label>
+              Tipo di esercizio
+              <select value={category} onChange={(e) => setCategory(e.target.value)}>
+                <option value="">Tutti i tipi</option>
+                {Object.entries(categories).map(([id, c]) => (
+                  <option key={id} value={id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Difficoltà
+              <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
+                <option value="">Tutti i livelli</option>
+                {Object.entries(difficultyLabels).map(([id, label]) => (
+                  <option key={id} value={id}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Gruppo muscolare
+              <select value={muscle} onChange={(e) => setMuscle(e.target.value)}>
+                <option value="">Tutti i muscoli</option>
+                {[...new Set(exercises.flatMap((e) => e.muscleGroups))].sort().map((m) => (
+                  <option key={m}>{m}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Occorrente
+              <select value={equipment} onChange={(e) => setEquipment(e.target.value)}>
+                <option value="">Qualsiasi</option>
+                {[...new Set(exercises.flatMap((e) => e.equipment))].sort().map((m) => (
+                  <option key={m}>{m}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <button className="btn btn-secondary mt" onClick={() => setShowFilters(false)}>
+            Mostra i risultati
+          </button>
+        </div>
+      )}
       <div className="results-label" role="status">
-        {filtered.length} esercizi trovati
+        {filtered.length === 1 ? '1 esercizio trovato' : `${filtered.length} esercizi trovati`}
       </div>
       {filtered.length ? (
         <div className="exercise-grid">
@@ -159,20 +172,10 @@ export function ExerciseLibrary() {
       ) : (
         <div className="empty-state">
           <Search size={32} />
-          <h2>Nessun movimento trovato</h2>
-          <p>Prova un altro nome o rimuovi qualche filtro.</p>
-          <button
-            className="btn btn-secondary"
-            onClick={() => {
-              setQuery('');
-              setCategory('');
-              setDifficulty('');
-              setMuscle('');
-              setEquipment('');
-              setOnlyFavorites(false);
-            }}
-          >
-            Reimposta filtri
+          <h2>Nessun esercizio trovato</h2>
+          <p>Prova un altro nome o togli qualche filtro.</p>
+          <button className="btn btn-secondary" onClick={reset}>
+            Mostra tutti gli esercizi
           </button>
         </div>
       )}

@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from 'react';
 import { ExternalLink, PlayCircle } from 'lucide-react';
 import type { Exercise } from '@/lib/models';
 import { youtubeSearchUrl } from '@/data/videos';
-import { CategoryArt } from './visuals';
 declare global {
   interface Window {
     onYouTubeIframeAPIReady?: () => void;
@@ -54,42 +53,37 @@ export function YouTubePlayer({ exercise }: { exercise: Exercise }) {
     };
   }, [enabled, exercise.youtubeVideoId]);
   const fallback = !exercise.youtubeVideoId || error;
+  if (fallback)
+    return (
+      <div className="video-fallback">
+        <p>{error ? 'Il video non si apre.' : 'Non c’è ancora un video scelto dall’allenatore.'}</p>
+        <a
+          className="btn btn-secondary"
+          aria-label={`Cerca “${exercise.name}” su YouTube`}
+          href={youtubeSearchUrl(exercise.name)}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <ExternalLink size={19} />
+          Cerca un video su YouTube
+        </a>
+        <p className="small muted">Chiedi all’allenatore quale dimostrazione seguire.</p>
+      </div>
+    );
   return (
     <div className="video-block">
-      {!enabled || fallback ? (
-        <>
-          <CategoryArt category={exercise.categories[0]} large />
-          <div className="video-overlay">
-            {fallback ? (
-              <>
-                <span className="video-label">
-                  {error ? 'Video non disponibile' : 'Dimostrazione da verificare'}
-                </span>
-                <a
-                  className="btn btn-secondary"
-                  href={youtubeSearchUrl(exercise.name)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <ExternalLink size={17} />
-                  Cerca “{exercise.name}” su YouTube
-                </a>
-              </>
-            ) : (
-              <button className="btn btn-secondary" onClick={() => setEnabled(true)}>
-                <PlayCircle size={20} />
-                Carica video YouTube
-              </button>
-            )}
-          </div>
-        </>
-      ) : (
+      {enabled ? (
         <div className="youtube-container" ref={container} />
+      ) : (
+        <div className="video-overlay">
+          <button className="btn btn-secondary" onClick={() => setEnabled(true)}>
+            <PlayCircle size={20} />
+            Guarda la dimostrazione
+          </button>
+        </div>
       )}
       <p className="video-note">
-        {fallback
-          ? 'Le istruzioni complete sono disponibili qui sotto. Fai verificare il video all’allenatore.'
-          : 'Il video usa YouTube e richiede Internet. Viene caricato solo dopo il tuo consenso.'}
+        Il video usa YouTube e richiede Internet. Si carica solo quando premi il pulsante.
       </p>
     </div>
   );

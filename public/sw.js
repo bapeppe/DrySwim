@@ -1,5 +1,5 @@
 /* Cache solo risorse pubbliche statiche e shell pre-caricate: nessun dato atleta né video. */
-const CACHE = 'swimdryland-static-v1';
+const CACHE = 'swimdryland-static-v2';
 const SHELL = [
   '/',
   '/esercizi',

@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { Download, Moon, ShieldCheck, Sun, Volume2 } from 'lucide-react';
 import { useStore } from '@/state/store';
 import { STORAGE_KEY } from '@/lib/storage';
@@ -31,16 +32,13 @@ export function Preferences() {
     <>
       <div className="page-heading">
         <div>
-          <span className="eyebrow">A MODO TUO</span>
-          <h1>
-            Il tuo spazio<span className="teal">.</span>
-          </h1>
-          <p>Piccole preferenze, un’esperienza più comoda.</p>
+          <h1>Impostazioni</h1>
+          <p>Scegli come usare l’app.</p>
         </div>
       </div>
       <div className="preferences-layout">
         <section className="panel form-panel">
-          <h2>Preferenze</h2>
+          <h2>Come preferisci allenarti?</h2>
           <div className="preference-row">
             <div>
               <h3>Aspetto</h3>
@@ -106,6 +104,10 @@ export function Preferences() {
           <p className="small muted">
             Le modalità non sono account e non proteggono l’accesso ai dati.
           </p>
+          <Link href="/allenatore" className="btn btn-secondary full-width mt">
+            <ShieldCheck size={19} />
+            Spazio allenatore
+          </Link>
         </section>
         <aside>
           <section className="panel">

@@ -46,8 +46,12 @@ export async function readWorkspace(): Promise<Workspace> {
       .order('recorded_at', { ascending: false }),
     db.from('workout_sessions').select('document').eq('user_id', user.id).order('created_at'),
   ]);
-  for (const reply of replies) databaseError(reply.error);
   const [team, catalog, plans, students, times, sessions] = replies;
+  databaseError(students.error);
+  const ownStudent = (students.data || []).find((a) => a.user_id === user.id && !a.archived);
+  if (membership.role === 'athlete' && !ownStudent)
+    throw new HttpError(403, 'Il tuo accesso non è attivo. Contatta l’allenatore.');
+  for (const reply of replies) databaseError(reply.error);
   const athletes = (students.data || []).map((a) => ({
     id: a.id,
     teamId: a.team_id,
@@ -55,9 +59,6 @@ export async function readWorkspace(): Promise<Workspace> {
     linked: !!a.user_id,
     archived: a.archived,
   }));
-  const ownStudent = (students.data || []).find((a) => a.user_id === user.id && !a.archived);
-  if (membership.role === 'athlete' && !ownStudent)
-    throw new HttpError(403, 'Il tuo accesso non è attivo. Contatta l’allenatore.');
   return workspaceSchema.parse({
     configured: true,
     status: 'ready',

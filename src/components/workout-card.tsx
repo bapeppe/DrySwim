@@ -1,40 +1,42 @@
 import Link from 'next/link';
-import { ArrowUpRight, Clock3, Repeat2 } from 'lucide-react';
-import { type Workout, categories } from '@/lib/models';
+import { ArrowRight, Clock3, Dumbbell, Waves, Zap } from 'lucide-react';
+import type { Workout } from '@/lib/models';
 import { estimateWorkoutSeconds } from '@/lib/workouts';
-import { exerciseById } from '@/data/exercises';
-import { CategoryArt } from './visuals';
-export function WorkoutCard({ workout, index = 0 }: { workout: Workout; index?: number }) {
-  const cat = exerciseById[workout.exercises[0].exerciseId]?.categories[0] ?? 'core';
+const descriptions: Record<string, string> = {
+  'forza-core': 'Rinforza gambe, braccia e addominali.',
+  'esplosivita-stabilita': 'Salti controllati ed esercizi di equilibrio.',
+  'mobilita-controllo': 'Muovi meglio spalle e anche, con calma.',
+};
+export function WorkoutCard({ workout }: { workout: Workout; index?: number }) {
+  const Icon =
+    workout.id === 'esplosivita-stabilita'
+      ? Zap
+      : workout.id === 'mobilita-controllo'
+        ? Waves
+        : Dumbbell;
   return (
     <Link className="workout-card" href={`/allenamenti/${workout.id}`}>
-      <div className="workout-image">
-        <CategoryArt category={cat} />
-        <span className="program-label">
-          {workout.custom ? 'PERSONALIZZATO' : `PROGRAMMA ${String.fromCharCode(65 + index)}`}
-        </span>
-        <span className="card-arrow">
-          <ArrowUpRight size={20} />
-        </span>
-      </div>
+      <span
+        className={`workout-symbol ${workout.id === 'esplosivita-stabilita' ? 'symbol-orange' : ''}`}
+      >
+        <Icon size={26} />
+      </span>
       <div className="workout-card-body">
-        <span className="eyebrow" style={{ color: categories[cat].color }}>
-          {categories[cat].short} · {workout.exercises.length} esercizi
-        </span>
         <h3>{workout.name}</h3>
-        <p>{workout.description}</p>
+        <p>
+          {descriptions[workout.id] ||
+            workout.description ||
+            'Un programma creato dal tuo allenatore.'}
+        </p>
         <div className="card-meta">
           <span>
-            <Clock3 size={15} />
+            <Clock3 size={16} />
             {Math.round(estimateWorkoutSeconds(workout) / 60)} min
           </span>
-          <span>
-            <Repeat2 size={15} />
-            {workout.rounds} giri
-          </span>
-          <span>Corpo libero</span>
+          <span>{workout.exercises.length} esercizi</span>
         </div>
       </div>
+      <ArrowRight className="workout-card-arrow" size={22} />
     </Link>
   );
 }

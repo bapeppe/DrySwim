@@ -1,10 +1,10 @@
 'use client';
+
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   Check,
   ChevronLeft,
-  FastForward,
   Flag,
   Pause,
   Play,
@@ -27,32 +27,16 @@ import {
   toSession,
 } from '@/lib/player';
 import { doseLabel, expandWorkout, formatTime } from '@/lib/workouts';
+import { unlockSound, beep } from '@/lib/audio';
+import { warmupCue } from '@/lib/guidance';
 import { YouTubePlayer } from './youtube-player';
-let audioContext: AudioContext | undefined;
-function unlockSound() {
-  try {
-    audioContext ??= new AudioContext();
-    void audioContext.resume();
-  } catch {}
-}
-function beep() {
-  try {
-    if (!audioContext) return;
-    const osc = audioContext.createOscillator(),
-      gain = audioContext.createGain();
-    gain.gain.value = 0.07;
-    osc.connect(gain);
-    gain.connect(audioContext.destination);
-    osc.frequency.value = 660;
-    osc.start();
-    osc.stop(audioContext.currentTime + 0.15);
-  } catch {}
-}
+
 export function WorkoutPlayer({ id }: { id: string }) {
   const { active, setActive, workouts, saveSession, preferences, setPreferences } = useStore();
-  const [now, setNow] = useState(() => Date.now()),
-    [confirmEnd, setConfirmEnd] = useState(false),
-    [saved, setSaved] = useState<'saved' | 'discarded' | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const [confirmEnd, setConfirmEnd] = useState(false);
+  const [approved, setApproved] = useState(false);
+  const [saved, setSaved] = useState<'saved' | 'discarded' | null>(null);
   const workout =
     [...defaultWorkouts, ...workouts].find((w) => w.id === id) ??
     (active?.workout.id === id ? active.workout : undefined);
@@ -73,20 +57,20 @@ export function WorkoutPlayer({ id }: { id: string }) {
       setActive(advance(active, now));
     }
   }, [active, now, preferences.sound, setActive]);
+
   if (saved)
     return (
       <div className="completion empty-state">
         <span className="completion-icon">
-          <Check size={42} />
+          <Check size={38} />
         </span>
-        <span className="eyebrow">UN ALTRO PASSO NEL TUO PERCORSO</span>
-        <h1>{saved === 'saved' ? 'Sessione salvata.' : 'Sessione scartata.'}</h1>
-        <p>Prenditi il tempo per recuperare. Ci vediamo al prossimo allenamento.</p>
-        <Link className="btn btn-primary" href="/progressi">
-          Guarda i tuoi progressi
+        <h1>{saved === 'saved' ? 'Allenamento salvato!' : 'Sessione scartata'}</h1>
+        <p>Ora bevi un po’ d’acqua e recupera.</p>
+        <Link className="btn btn-primary" href="/">
+          Torna alla Home
         </Link>
-        <Link href="/allenamenti" className="text-link">
-          Torna agli allenamenti
+        <Link href="/progressi" className="text-link">
+          Guarda i tuoi progressi
         </Link>
       </div>
     );
@@ -94,43 +78,54 @@ export function WorkoutPlayer({ id }: { id: string }) {
     return (
       <div className="empty-state">
         <h1>Programma non disponibile</h1>
-        <Link href="/allenamenti">Scegli un allenamento</Link>
+        <Link href="/allenamenti" className="btn btn-primary">
+          Scegli un allenamento
+        </Link>
       </div>
     );
   if (!active || active.workout.id !== id)
     return (
       <div className="player-start panel">
-        <Waves size={40} />
-        <span className="eyebrow">IL TUO SPAZIO, IL TUO RITMO</span>
+        <Waves size={36} />
         <h1>{workout.name}</h1>
-        <p>
-          Il riscaldamento viene prima. Premi Inizia quando sei pronto: i timer funzionano anche
-          senza video.
-        </p>
         {active ? (
           <>
-            <p className="alert">
-              Hai già una sessione in corso. Salvala o termina quella sessione prima di iniziarne
-              un’altra.
-            </p>
+            <p>Prima di iniziare un altro programma, termina o salva quello in corso.</p>
             <Link href={`/allenamento/${active.workout.id}`} className="btn btn-primary">
-              Riprendi {active.workout.name}
+              Riprendi allenamento
             </Link>
           </>
         ) : (
-          <button
-            className="btn btn-primary"
-            onClick={() => setActive(startWorkout(workout, Date.now(), crypto.randomUUID()))}
-          >
-            <Play size={18} />
-            Prepara la sessione
-          </button>
+          <>
+            <p>Cominciamo dal riscaldamento. Poi ti guidiamo un esercizio alla volta.</p>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={approved}
+                onChange={(e) => setApproved(e.target.checked)}
+              />
+              <span>Ho concordato questo programma con il mio allenatore.</span>
+            </label>
+            <button
+              className="btn btn-primary full-width"
+              disabled={!approved}
+              onClick={() => {
+                unlockSound();
+                const t = Date.now();
+                setActive(toggleRunning(startWorkout(workout, t, crypto.randomUUID()), t));
+              }}
+            >
+              <Play size={20} />
+              Inizia allenamento
+            </button>
+          </>
         )}
         <Link className="text-link" href={`/allenamenti/${id}`}>
-          Torna al programma
+          Guarda il programma
         </Link>
       </div>
     );
+
   const steps = expandWorkout(active.workout),
     step = steps[active.index],
     ex = step.exerciseId ? exerciseById[step.exerciseId] : undefined;
@@ -139,9 +134,16 @@ export function WorkoutPlayer({ id }: { id: string }) {
   const totalSets = steps.filter((s) => s.kind === 'exercise').length;
   const timed = step.kind !== 'exercise' || step.dose?.mode === 'time';
   const next = steps.slice(active.index + 1).find((s) => s.kind === 'exercise');
+  const cue =
+    step.kind === 'warmup' ? warmupCue(active.workout, remaining(active, now) / 1000) : null;
+  const phase = step.kind === 'warmup' ? 0 : step.kind === 'cooldown' ? 2 : 1;
   const move = (skip = false) => {
     if (preferences.sound) beep();
     setActive(advance(active, Date.now(), skip));
+  };
+  const pauseOrResume = () => {
+    unlockSound();
+    setActive(toggleRunning(active, Date.now()));
   };
   if (active.finished)
     return (
@@ -149,19 +151,16 @@ export function WorkoutPlayer({ id }: { id: string }) {
         <span className="completion-icon">
           <Check size={38} />
         </span>
-        <span className="eyebrow">
-          {result.completed ? 'ALLENAMENTO COMPLETATO' : 'SESSIONE INTERROTTA'}
-        </span>
-        <h1>{result.completed ? 'Ben fatto. Ora recupera.' : 'Ogni movimento conta.'}</h1>
+        <h1>{result.completed ? 'Allenamento finito!' : 'Ti sei fermato. Va bene così.'}</h1>
         <p>{active.workout.name}</p>
         <div className="summary-stats">
           <div>
             <strong>{formatTime(result.durationSeconds)}</strong>
-            <span>Tempo effettivo</span>
+            <span>Tempo di allenamento</span>
           </div>
           <div>
             <strong>{new Set(completed.map((p) => p.exerciseId)).size}</strong>
-            <span>Esercizi eseguiti</span>
+            <span>Esercizi fatti</span>
           </div>
           <div>
             <strong>
@@ -176,47 +175,49 @@ export function WorkoutPlayer({ id }: { id: string }) {
         </div>
         <p className="muted">
           {result.completed
-            ? 'Il risultato sarà aggiunto ai tuoi progressi.'
-            : 'La sessione verrà conservata nello storico come interrotta, senza aumentare il conteggio degli allenamenti completati.'}
+            ? 'Salva il risultato, poi prenditi una pausa.'
+            : 'Puoi salvare quello che hai fatto. Lo troverai nei progressi come allenamento interrotto.'}
         </p>
         <button
-          className="btn btn-primary"
+          className="btn btn-primary full-width"
           onClick={() => {
             saveSession(toSession(active, Date.now()));
             setSaved('saved');
           }}
         >
-          <Check size={18} />
+          <Check size={20} />
           Salva il risultato
         </button>
         <button
           className="btn btn-ghost"
           onClick={() => {
-            if (window.confirm('Eliminare questa sessione senza salvarla?')) {
+            if (window.confirm('Vuoi uscire senza salvare questo allenamento?')) {
               setActive(null);
               setSaved('discarded');
             }
           }}
         >
-          Scarta sessione
+          Esci senza salvare
         </button>
       </div>
     );
+
   return (
     <div className="player">
+      <div className="player-phase" aria-label="Fasi dell’allenamento">
+        {['Riscaldamento', 'Esercizi', 'Recupero finale'].map((label, i) => (
+          <span
+            key={label}
+            aria-current={phase === i ? 'step' : undefined}
+            className={phase === i ? 'current' : phase > i ? 'done' : ''}
+          >
+            {phase > i ? <Check size={15} /> : <span>{i + 1}</span>}
+            {label}
+          </span>
+        ))}
+      </div>
       <div className="player-top">
-        <div>
-          <span className="eyebrow">{active.workout.name}</span>
-          <h1>
-            {step.kind === 'exercise'
-              ? `Giro ${step.round} di ${active.workout.rounds}`
-              : step.kind === 'warmup'
-                ? 'Prima il riscaldamento'
-                : step.kind === 'cooldown'
-                  ? 'Il momento di rallentare'
-                  : 'Una pausa per ripartire'}
-          </h1>
-        </div>
+        <span>{active.workout.name}</span>
         <button
           className="icon-button"
           aria-label={preferences.sound ? 'Disattiva segnali sonori' : 'Attiva segnali sonori'}
@@ -226,152 +227,191 @@ export function WorkoutPlayer({ id }: { id: string }) {
             setPreferences({ sound: !preferences.sound });
           }}
         >
-          {preferences.sound ? <Volume2 /> : <VolumeX />}
+          {preferences.sound ? <Volume2 size={20} /> : <VolumeX size={20} />}
         </button>
       </div>
       <div className="player-progress">
-        <div className="progress-track">
+        <div
+          className="progress-track"
+          role="progressbar"
+          aria-label="Avanzamento allenamento"
+          aria-valuemin={0}
+          aria-valuemax={steps.length}
+          aria-valuenow={active.index}
+        >
           <span style={{ width: `${(active.index / steps.length) * 100}%` }} />
         </div>
         <span>
-          Fase {active.index + 1} / {steps.length} · {completed.length} serie completate
+          {step.round > 0 && phase === 1 ? `Giro ${step.round} di ${active.workout.rounds} · ` : ''}
+          {completed.length} di {totalSets} serie fatte
         </span>
       </div>
-      <div className="player-layout">
-        <div className={`player-stage ${step.kind === 'rest' ? 'rest-stage' : ''}`}>
-          <span className="stage-label">
-            {step.kind === 'exercise'
-              ? `SERIE ${step.set} · ${doseLabel(step.dose!)}`
-              : step.kind === 'rest'
-                ? 'RECUPERO'
-                : 'IL TUO TEMPO'}
-          </span>
-          <h2 aria-live="polite">{step.title}</h2>
-          {timed ? (
-            <div className="timer-display" role="timer" aria-label="Tempo rimanente">
-              {formatTime(remaining(active, now) / 1000)}
-            </div>
-          ) : (
-            <div className="rep-display">
-              <strong>{step.dose?.reps}</strong>
-              <span>
-                ripetizioni{step.dose?.sides === 2 ? ' per lato / direzione' : ''}
-                {step.dose?.positions !== 1 ? ` × ${step.dose?.positions} posizioni` : ''}
-              </span>
-            </div>
-          )}
-          {timed && step.dose?.sides === 2 && (
-            <p className="side-cue">
-              {remaining(active, now) / 1000 > (step.dose.durationSeconds ?? 0)
-                ? 'Primo lato'
-                : 'Secondo lato'}{' '}
-              · {step.dose.durationSeconds}s per lato
-            </p>
-          )}
-          <p>{ex ? ex.instructions[1] : step.text}</p>
-          {ex && (
-            <div className="player-simpler">
-              <strong>Puoi semplificare</strong>
-              <span>{ex.easierVariation}</span>
-            </div>
-          )}
-          <div className="player-primary-controls">
-            <button
-              className="btn btn-secondary"
-              onClick={() => {
-                unlockSound();
-                setActive(toggleRunning(active, Date.now()));
-              }}
-            >
-              {active.running ? <Pause size={20} /> : <Play size={20} />}{' '}
-              {active.running ? 'Pausa' : elapsed(active, now) > 0 ? 'Riprendi' : 'Inizia'}
-            </button>
-            {step.kind === 'exercise' && (
-              <button disabled={!active.running} className="btn btn-primary" onClick={() => move()}>
-                <Check size={20} />
-                {timed ? 'Termina la tenuta' : 'Serie completata'}
-              </button>
-            )}
+      <section className={`player-stage ${step.kind === 'rest' ? 'rest-stage' : ''}`}>
+        {!active.running && (
+          <div className="paused-label" role="status">
+            <Pause size={17} />
+            In pausa
           </div>
-          <div className="player-secondary-controls">
-            <button
-              className="btn btn-ghost"
-              disabled={active.index === 0}
-              onClick={() => setActive(previous(active, Date.now()))}
-            >
-              <ChevronLeft size={17} />
-              Precedente
-            </button>
-            <button className="btn btn-ghost" onClick={() => move(step.kind === 'exercise')}>
-              {step.kind === 'rest' ? <FastForward size={17} /> : <SkipForward size={17} />}{' '}
-              {step.kind === 'rest'
-                ? 'Salta recupero'
-                : step.kind === 'exercise'
-                  ? 'Salta esercizio'
-                  : 'Salta fase'}
-            </button>
-          </div>
-          <div className="player-clock">
-            Tempo attivo della sessione: {formatTime(elapsed(active, now) / 1000)}
-          </div>
-        </div>
-        <aside className="player-info">
-          {ex ? (
-            <>
-              <YouTubePlayer key={ex.id} exercise={ex} />
-              <details className="panel">
-                <summary>Istruzioni e sicurezza</summary>
-                <ol>
-                  {ex.instructions.map((i) => (
-                    <li key={i}>{i}</li>
-                  ))}
-                </ol>
-                <p>{doseLabel(step.dose!)}</p>
-                {ex.safetyNotes.map((n) => (
-                  <p key={n} className="small">
-                    {n}
-                  </p>
-                ))}
-              </details>
-            </>
-          ) : (
-            <div className="panel">
-              <Waves size={35} />
-              <h3>{step.kind === 'rest' ? 'Recupera davvero' : 'Muoviti con calma'}</h3>
-              <p>{step.text}</p>
-            </div>
-          )}
-          {next && (
-            <div className="up-next">
-              <span className="eyebrow">IL PROSSIMO MOVIMENTO</span>
-              <strong>{next.title}</strong>
-              <span>{doseLabel(next.dose!)}</span>
-            </div>
-          )}
-          <p className="small muted">
-            Recupero successivo:{' '}
-            {steps[active.index + 1]?.kind === 'rest'
-              ? `${steps[active.index + 1].durationSeconds} secondi`
-              : 'segui la prossima fase'}
-            . Se serve più tempo, metti in pausa.
-          </p>
-        </aside>
-      </div>
-      <div className="player-end">
-        {confirmEnd ? (
-          <div className="confirm-row" role="alert">
-            <span>Terminare adesso? Potrai salvare la sessione parziale.</span>
-            <button
-              className="btn btn-danger"
-              onClick={() => setActive(endWorkout(active, Date.now()))}
-            >
-              Sì, termina
-            </button>
-            <button className="btn btn-secondary" onClick={() => setConfirmEnd(false)}>
-              Continua
-            </button>
+        )}
+        <h1 aria-live="polite">{step.title}</h1>
+        {timed ? (
+          <div className="timer-display" role="timer" aria-label="Tempo rimanente">
+            {formatTime(remaining(active, now) / 1000)}
           </div>
         ) : (
+          <div className="rep-display">
+            <strong>{step.dose?.reps}</strong>
+            <span>
+              ripetizioni
+              {step.dose?.sides === 2
+                ? step.exerciseId === 'shoulder-circles'
+                  ? ' per direzione'
+                  : ' per lato'
+                : ''}
+              {step.dose && step.dose.positions > 1 ? ' per posizione (Y, T, W)' : ''}
+            </span>
+          </div>
+        )}
+        {timed && step.dose?.sides === 2 && (
+          <p className="side-cue">
+            {remaining(active, now) / 1000 > (step.dose.durationSeconds ?? 0)
+              ? 'Primo lato'
+              : 'Cambia: secondo lato'}{' '}
+            · {step.dose.durationSeconds} secondi per lato
+          </p>
+        )}
+        {step.kind === 'rest' ? (
+          <>
+            <p>Respira e recupera. Il prossimo esercizio parte quando finisce il timer.</p>
+            {next && (
+              <div className="next-exercise">
+                <span>Tra poco</span>
+                <strong>{next.title}</strong>
+                <small>{doseLabel(next.dose!)}</small>
+              </div>
+            )}
+          </>
+        ) : ex ? (
+          <>
+            <p className="movement-cue">{ex.instructions[1]}</p>
+            {ex.categories.includes('esplosivita') && (
+              <p className="player-safety">
+                Atterra piano, piega le ginocchia e tienile in linea con i piedi. Se perdi il
+                controllo, fermati e recupera.
+              </p>
+            )}
+          </>
+        ) : (
+          <>
+            {cue ? (
+              <div className="warmup-cue">
+                <span>
+                  Movimento {cue.index} di {cue.total}
+                </span>
+                <h2>{cue.title}</h2>
+                <p>{cue.instruction}</p>
+              </div>
+            ) : (
+              <p className="phase-instructions">{step.text}</p>
+            )}
+          </>
+        )}
+        <div className="player-primary-controls">
+          {step.kind === 'exercise' && !timed && active.running ? (
+            <>
+              <button className="btn btn-primary full-width" onClick={() => move()}>
+                <Check size={22} />
+                Ho finito
+              </button>
+              <button className="btn btn-secondary full-width" onClick={pauseOrResume}>
+                <Pause size={19} />
+                Pausa
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                className={`btn ${active.running ? 'btn-secondary' : 'btn-primary'} full-width`}
+                onClick={pauseOrResume}
+              >
+                {active.running ? <Pause size={20} /> : <Play size={20} />}
+                {active.running ? 'Pausa' : 'Riprendi'}
+              </button>
+              {timed && active.running && (
+                <p className="auto-next-note">Il timer ti porta alla fase successiva.</p>
+              )}
+            </>
+          )}
+        </div>
+        {step.kind === 'rest' && (
+          <button className="btn btn-ghost" onClick={() => move()}>
+            Salta recupero
+            <SkipForward size={17} />
+          </button>
+        )}
+      </section>
+      {ex && (
+        <div className="player-help">
+          <details className="disclosure panel">
+            <summary>Come si fa? Guarda i passaggi</summary>
+            <ol className="instruction-list">
+              {ex.instructions.map((instruction, i) => (
+                <li key={instruction}>
+                  <span>{i + 1}</span>
+                  <p>{instruction}</p>
+                </li>
+              ))}
+            </ol>
+            <div className="easier-box">
+              <h3>Se è troppo difficile</h3>
+              <p>{ex.easierVariation}</p>
+            </div>
+            {ex.safetyNotes.map((n) => (
+              <p className="small muted" key={n}>
+                {n}
+              </p>
+            ))}
+            {ex.prerequisites.length > 0 && (
+              <>
+                <h3>Prima di provarlo</h3>
+                <ul>
+                  {ex.prerequisites.map((n) => (
+                    <li key={n}>{n}</li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </details>
+          <details className="disclosure panel">
+            <summary>Vuoi vedere una dimostrazione?</summary>
+            <YouTubePlayer key={ex.id} exercise={ex} />
+          </details>
+        </div>
+      )}
+      <details className="disclosure player-options">
+        <summary>Altre opzioni</summary>
+        <div className="player-secondary-controls">
+          <button
+            className="btn btn-secondary"
+            disabled={active.index === 0}
+            onClick={() => setActive(previous(active, Date.now()))}
+          >
+            <ChevronLeft size={18} />
+            Esercizio precedente
+          </button>
+          <button className="btn btn-secondary" onClick={() => move(step.kind === 'exercise')}>
+            <SkipForward size={18} />
+            {step.kind === 'rest'
+              ? 'Salta questa pausa'
+              : step.kind === 'exercise'
+                ? 'Salta esercizio'
+                : 'Salta fase'}
+          </button>
+          {step.kind === 'exercise' && timed && (
+            <button className="btn btn-secondary" disabled={!active.running} onClick={() => move()}>
+              Termina la tenuta
+            </button>
+          )}
           <button
             className="btn btn-ghost"
             onClick={() => {
@@ -379,11 +419,35 @@ export function WorkoutPlayer({ id }: { id: string }) {
               setConfirmEnd(true);
             }}
           >
-            <Flag size={16} />
+            <Flag size={18} />
             Termina allenamento
           </button>
-        )}
-      </div>
+        </div>
+        <p className="muted small">
+          Tempo di allenamento: {formatTime(elapsed(active, now) / 1000)}
+        </p>
+      </details>
+      {confirmEnd && (
+        <div className="confirm-row panel" role="alert">
+          <h2>Vuoi fermarti qui?</h2>
+          <p>Puoi salvare gli esercizi che hai già fatto.</p>
+          <button
+            className="btn btn-danger full-width"
+            onClick={() => setActive(endWorkout(active, Date.now()))}
+          >
+            Sì, termina
+          </button>
+          <button
+            className="btn btn-secondary full-width"
+            onClick={() => {
+              setConfirmEnd(false);
+              setActive(toggleRunning(active, Date.now()));
+            }}
+          >
+            Continua ad allenarti
+          </button>
+        </div>
+      )}
     </div>
   );
 }

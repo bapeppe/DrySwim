@@ -211,3 +211,22 @@ describe('Persistenza e calendario', () => {
     expect(days[6].getDay()).toBe(0);
   });
 });
+
+describe('Istruzioni del riscaldamento', () => {
+  it('mostra un movimento alla volta ai confini del countdown', async () => {
+    const { warmupCue } = await import('@/lib/guidance');
+    const workout = defaultWorkouts[0];
+    expect(warmupCue(workout, 300)?.title).toBe('Marcia sul posto');
+    expect(warmupCue(workout, 241)?.index).toBe(1);
+    expect(warmupCue(workout, 240)?.title).toBe('Cat-Cow');
+    expect(warmupCue(workout, 1)?.index).toBe(5);
+    expect(warmupCue(workout, -10)?.index).toBe(5);
+  });
+  it('mantiene il testo allenatore per programmi o durate personalizzate', async () => {
+    const { warmupCue } = await import('@/lib/guidance');
+    expect(warmupCue({ ...defaultWorkouts[0], id: 'custom' }, 300)).toBeNull();
+    expect(warmupCue({ ...defaultWorkouts[0], warmupSeconds: 100 }, 90)).toBeNull();
+    for (const workout of defaultWorkouts)
+      expect(warmupCue(workout, workout.warmupSeconds)?.index).toBe(1);
+  });
+});

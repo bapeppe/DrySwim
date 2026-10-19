@@ -29,13 +29,9 @@ export function ProgressDashboard() {
     <>
       <div className="page-heading">
         <div>
-          <span className="eyebrow">IL TUO PERCORSO, SENZA CONFRONTI</span>
-          <h1>
-            Ogni passo conta<span className="teal">.</span>
-          </h1>
-          <p>I tuoi movimenti, il tuo tempo. Solo sessioni realmente salvate.</p>
+          <h1>I tuoi progressi</h1>
+          <p>Ritrova gli allenamenti che hai fatto e salvato.</p>
         </div>
-        <span className="count-badge">Dati locali · nessuna classifica</span>
       </div>
       <div className="stat-grid">
         <div className="stat">
@@ -70,87 +66,99 @@ export function ProgressDashboard() {
         <div className="info-banner">
           <Waves size={25} />
           <p>
-            Il grafico prenderà forma dopo la prima sessione completata. Allenati secondo il piano
-            concordato, senza inseguire numeri.
+            Dopo il primo allenamento completato, vedrai qui i tuoi progressi. Segui il tuo piano:
+            anche i giorni di riposo contano.
           </p>
         </div>
       )}
-      <div className="progress-grid">
-        <section className="panel">
-          <div className="section-title">
-            <h2>Il tuo ritmo nel tempo</h2>
-            <TrendingUp size={20} />
-          </div>
-          <p className="muted">Sessioni completate · ultime 8 settimane</p>
-          <div
-            className="frequency-chart"
-            role="img"
-            aria-label={weeks.map((w) => `${w.label}: ${w.count} sessioni`).join(', ')}
-          >
-            {weeks.map((w) => (
-              <div className="chart-column" key={w.label}>
-                <strong>{w.count}</strong>
-                <div className="chart-bar-wrap">
-                  <div
-                    className="chart-bar"
-                    style={{ height: `${(w.count / max) * 100}%`, minHeight: w.count ? 8 : 2 }}
-                  />
+      {done.length > 0 && (
+        <details className="disclosure progress-details panel">
+          <summary>Vedi grafici e calendario</summary>
+          <div className="disclosure-body">
+            <div className="progress-grid">
+              <section className="panel">
+                <div className="section-title">
+                  <h2>Il tuo ritmo nel tempo</h2>
+                  <TrendingUp size={20} />
                 </div>
-                <span>{w.label}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-        <section className="panel">
-          <h2>Un lavoro a tutto tondo</h2>
-          <p className="muted">Sessioni per categoria · una sessione può coinvolgere più aree.</p>
-          <div className="category-chart">
-            {catCounts.map((c) => (
-              <div key={c.id}>
-                <span>{c.short}</span>
-                <div className="progress-track">
-                  <span
-                    style={{
-                      width: `${done.length ? (c.count / done.length) * 100 : 0}%`,
-                      background: c.color,
-                    }}
-                  />
+                <p className="muted">Sessioni completate · ultime 8 settimane</p>
+                <div
+                  className="frequency-chart"
+                  role="img"
+                  aria-label={weeks.map((w) => `${w.label}: ${w.count} sessioni`).join(', ')}
+                >
+                  {weeks.map((w) => (
+                    <div className="chart-column" key={w.label}>
+                      <strong>{w.count}</strong>
+                      <div className="chart-bar-wrap">
+                        <div
+                          className="chart-bar"
+                          style={{
+                            height: `${(w.count / max) * 100}%`,
+                            minHeight: w.count ? 8 : 2,
+                          }}
+                        />
+                      </div>
+                      <span>{w.label}</span>
+                    </div>
+                  ))}
                 </div>
-                <strong>{c.count}</strong>
+              </section>
+              <section className="panel">
+                <h2>Un lavoro a tutto tondo</h2>
+                <p className="muted">
+                  Sessioni per categoria · una sessione può coinvolgere più aree.
+                </p>
+                <div className="category-chart">
+                  {catCounts.map((c) => (
+                    <div key={c.id}>
+                      <span>{c.short}</span>
+                      <div className="progress-track">
+                        <span
+                          style={{
+                            width: `${done.length ? (c.count / done.length) * 100 : 0}%`,
+                            background: c.color,
+                          }}
+                        />
+                      </div>
+                      <strong>{c.count}</strong>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </div>
+            <section className="panel mt">
+              <div className="section-title">
+                <h2>Calendario delle sessioni</h2>
+                <span className="tag">Ultimi 35 giorni</span>
               </div>
-            ))}
+              <div className="session-calendar">
+                {Array.from({ length: 35 }, (_, i) => {
+                  const d = new Date();
+                  d.setDate(d.getDate() - (34 - i));
+                  const count = done.filter(
+                    (s) => localDateKey(new Date(s.completedAt)) === localDateKey(d),
+                  ).length;
+                  return (
+                    <div
+                      key={i}
+                      className={`calendar-cell ${count ? 'has-session' : ''}`}
+                      title={`${d.toLocaleDateString('it-IT')}: ${count} sessioni`}
+                    >
+                      <small>{d.toLocaleDateString('it-IT', { weekday: 'short' })}</small>
+                      <strong>{d.getDate()}</strong>
+                      <span>{count ? <Check size={14} /> : <span />}</span>
+                      <span className="sr-only">{count} sessioni</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
           </div>
-        </section>
-      </div>
-      <section className="panel mt">
-        <div className="section-title">
-          <h2>Calendario delle sessioni</h2>
-          <span className="tag">Ultimi 35 giorni</span>
-        </div>
-        <div className="session-calendar">
-          {Array.from({ length: 35 }, (_, i) => {
-            const d = new Date();
-            d.setDate(d.getDate() - (34 - i));
-            const count = done.filter(
-              (s) => localDateKey(new Date(s.completedAt)) === localDateKey(d),
-            ).length;
-            return (
-              <div
-                key={i}
-                className={`calendar-cell ${count ? 'has-session' : ''}`}
-                title={`${d.toLocaleDateString('it-IT')}: ${count} sessioni`}
-              >
-                <small>{d.toLocaleDateString('it-IT', { weekday: 'short' })}</small>
-                <strong>{d.getDate()}</strong>
-                <span>{count ? <Check size={14} /> : <span />}</span>
-                <span className="sr-only">{count} sessioni</span>
-              </div>
-            );
-          })}
-        </div>
-      </section>
+        </details>
+      )}
       <div className="section-heading">
-        <h2>La tua storia</h2>
+        <h2>I tuoi allenamenti</h2>
         <span className="tag">{sessions.length} sessioni salvate</span>
       </div>
       {sessions.length ? (
@@ -181,8 +189,8 @@ export function ProgressDashboard() {
       ) : (
         <div className="empty-state">
           <CalendarDays size={30} />
-          <h3>Una storia ancora da scrivere</h3>
-          <p>Le sessioni salvate appariranno qui, senza dati dimostrativi.</p>
+          <h3>Ancora nessun allenamento</h3>
+          <p>Quando finisci, premi “Salva il risultato” per ritrovarlo qui.</p>
         </div>
       )}
     </>

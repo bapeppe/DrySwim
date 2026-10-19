@@ -7,8 +7,8 @@ export const doseSeconds = (dose: Dose) =>
       dose.sides *
       dose.positions,
   );
-export function doseLabel(dose: Dose) {
-  return `${dose.mode === 'time' ? `${dose.durationSeconds} sec` : `${dose.reps} rip`}${dose.sides === 2 ? ' per lato / direzione' : ''}${dose.positions > 1 ? ` × ${dose.positions} posizioni` : ''}`;
+export function doseLabel(dose: Dose, exerciseId?: string) {
+  return `${dose.mode === 'time' ? `${dose.durationSeconds} secondi` : `${dose.reps} ripetizioni`}${dose.sides === 2 ? (exerciseId === 'shoulder-circles' ? ' per direzione' : ' per lato') : ''}${dose.positions > 1 ? ` per posizione (${dose.positions} posizioni)` : ''}`;
 }
 export type WorkoutStep = {
   id: string;

@@ -1,0 +1,190 @@
+'use client';
+import { Check, Clock3, CalendarDays, TrendingUp, Waves } from 'lucide-react';
+import { useStore } from '@/state/store';
+import { categories } from '@/lib/models';
+import { localDateKey, weekDays } from '@/lib/workouts';
+export function ProgressDashboard() {
+  const sessions = useStore((s) => s.sessions);
+  const done = sessions.filter((s) => s.completed);
+  const days = weekDays(),
+    keys = days.map(localDateKey);
+  const week = done.filter((s) => keys.includes(localDateKey(new Date(s.completedAt))));
+  const catCounts = Object.entries(categories).map(([id, c]) => ({
+    ...c,
+    id,
+    count: done.filter((s) => s.categories.some((cat) => cat === id)).length,
+  }));
+  const weeks = Array.from({ length: 8 }, (_, i) => {
+    const date = new Date();
+    date.setDate(date.getDate() - 7 * (7 - i));
+    const days = weekDays(date);
+    const keys = days.map(localDateKey);
+    return {
+      label: days[0].toLocaleDateString('it-IT', { day: 'numeric', month: 'short' }),
+      count: done.filter((s) => keys.includes(localDateKey(new Date(s.completedAt)))).length,
+    };
+  });
+  const max = Math.max(1, ...weeks.map((w) => w.count));
+  return (
+    <>
+      <div className="page-heading">
+        <div>
+          <span className="eyebrow">IL TUO PERCORSO, SENZA CONFRONTI</span>
+          <h1>
+            Ogni passo conta<span className="teal">.</span>
+          </h1>
+          <p>I tuoi movimenti, il tuo tempo. Solo sessioni realmente salvate.</p>
+        </div>
+        <span className="count-badge">Dati locali · nessuna classifica</span>
+      </div>
+      <div className="stat-grid">
+        <div className="stat">
+          <span className="stat-icon">
+            <Check />
+          </span>
+          <div>
+            <span>Allenamenti completati</span>
+            <strong>{done.length}</strong>
+          </div>
+        </div>
+        <div className="stat">
+          <span className="stat-icon blue">
+            <Clock3 />
+          </span>
+          <div>
+            <span>Minuti di allenamento</span>
+            <strong>{Math.floor(done.reduce((sum, s) => sum + s.durationSeconds, 0) / 60)}</strong>
+          </div>
+        </div>
+        <div className="stat">
+          <span className="stat-icon purple">
+            <CalendarDays />
+          </span>
+          <div>
+            <span>Sessioni della settimana</span>
+            <strong>{week.length}</strong>
+          </div>
+        </div>
+      </div>
+      {!done.length && (
+        <div className="info-banner">
+          <Waves size={25} />
+          <p>
+            Il grafico prenderà forma dopo la prima sessione completata. Allenati secondo il piano
+            concordato, senza inseguire numeri.
+          </p>
+        </div>
+      )}
+      <div className="progress-grid">
+        <section className="panel">
+          <div className="section-title">
+            <h2>Il tuo ritmo nel tempo</h2>
+            <TrendingUp size={20} />
+          </div>
+          <p className="muted">Sessioni completate · ultime 8 settimane</p>
+          <div
+            className="frequency-chart"
+            role="img"
+            aria-label={weeks.map((w) => `${w.label}: ${w.count} sessioni`).join(', ')}
+          >
+            {weeks.map((w) => (
+              <div className="chart-column" key={w.label}>
+                <strong>{w.count}</strong>
+                <div className="chart-bar-wrap">
+                  <div
+                    className="chart-bar"
+                    style={{ height: `${(w.count / max) * 100}%`, minHeight: w.count ? 8 : 2 }}
+                  />
+                </div>
+                <span>{w.label}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="panel">
+          <h2>Un lavoro a tutto tondo</h2>
+          <p className="muted">Sessioni per categoria · una sessione può coinvolgere più aree.</p>
+          <div className="category-chart">
+            {catCounts.map((c) => (
+              <div key={c.id}>
+                <span>{c.short}</span>
+                <div className="progress-track">
+                  <span
+                    style={{
+                      width: `${done.length ? (c.count / done.length) * 100 : 0}%`,
+                      background: c.color,
+                    }}
+                  />
+                </div>
+                <strong>{c.count}</strong>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+      <section className="panel mt">
+        <div className="section-title">
+          <h2>Calendario delle sessioni</h2>
+          <span className="tag">Ultimi 35 giorni</span>
+        </div>
+        <div className="session-calendar">
+          {Array.from({ length: 35 }, (_, i) => {
+            const d = new Date();
+            d.setDate(d.getDate() - (34 - i));
+            const count = done.filter(
+              (s) => localDateKey(new Date(s.completedAt)) === localDateKey(d),
+            ).length;
+            return (
+              <div
+                key={i}
+                className={`calendar-cell ${count ? 'has-session' : ''}`}
+                title={`${d.toLocaleDateString('it-IT')}: ${count} sessioni`}
+              >
+                <small>{d.toLocaleDateString('it-IT', { weekday: 'short' })}</small>
+                <strong>{d.getDate()}</strong>
+                <span>{count ? <Check size={14} /> : <span />}</span>
+                <span className="sr-only">{count} sessioni</span>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+      <div className="section-heading">
+        <h2>La tua storia</h2>
+        <span className="tag">{sessions.length} sessioni salvate</span>
+      </div>
+      {sessions.length ? (
+        <div className="history-list">
+          {[...sessions].reverse().map((s) => (
+            <article key={s.id} className="history-row">
+              <span className="history-icon">
+                <Check size={20} />
+              </span>
+              <div>
+                <h3>{s.workoutName}</h3>
+                <p>
+                  {new Date(s.completedAt).toLocaleDateString('it-IT', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                  })}{' '}
+                  · {Math.round(s.durationSeconds / 60)} min ·{' '}
+                  {s.progress.filter((p) => p.status === 'completed').length} serie
+                </p>
+              </div>
+              <span className={`tag ${s.completed ? 'success' : ''}`}>
+                {s.completed ? 'Completato' : 'Interrotto'}
+              </span>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="empty-state">
+          <CalendarDays size={30} />
+          <h3>Una storia ancora da scrivere</h3>
+          <p>Le sessioni salvate appariranno qui, senza dati dimostrativi.</p>
+        </div>
+      )}
+    </>
+  );
+}

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Heart, Search, SlidersHorizontal } from 'lucide-react';
-import { exercises } from '@/data/exercises';
+import { CustomExerciseForm } from './custom-exercise-form';
 import { categories, difficultyLabels, type Exercise } from '@/lib/models';
 import { doseLabel, filterExercises } from '@/lib/workouts';
 import { useStore } from '@/state/store';
@@ -42,7 +42,7 @@ export function ExerciseCard({ exercise: e }: { exercise: Exercise }) {
     </article>
   );
 }
-export function ExerciseLibrary() {
+export function ExerciseLibrary({ startAdding = false }: { startAdding?: boolean }) {
   const [query, setQuery] = useState(''),
     [category, setCategory] = useState(''),
     [difficulty, setDifficulty] = useState(''),
@@ -50,7 +50,8 @@ export function ExerciseLibrary() {
     [equipment, setEquipment] = useState(''),
     [onlyFavorites, setOnlyFavorites] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  const favorites = useStore((s) => s.favorites);
+  const { favorites, exercises, member } = useStore();
+  const [adding, setAdding] = useState(startAdding);
   const filtered = filterExercises(
     query,
     category,
@@ -58,6 +59,7 @@ export function ExerciseLibrary() {
     muscle,
     equipment,
     onlyFavorites ? favorites : undefined,
+    exercises,
   );
   const filterCount = [category, difficulty, muscle, equipment].filter(Boolean).length;
   const reset = () => {
@@ -76,6 +78,14 @@ export function ExerciseLibrary() {
           <p>Non conosci un movimento? Cerca qui come farlo.</p>
         </div>
       </div>
+      {member?.role === 'coach' && (
+        <>
+          <button className="btn btn-primary" onClick={() => setAdding(!adding)}>
+            {adding ? 'Chiudi' : 'Aggiungi esercizio'}
+          </button>
+          {adding && <CustomExerciseForm onSaved={() => setAdding(false)} />}
+        </>
+      )}
       <div className="library-search">
         <label className="search-field">
           <Search size={21} />

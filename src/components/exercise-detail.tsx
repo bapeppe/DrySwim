@@ -8,7 +8,7 @@ import { useStore } from '@/state/store';
 import { YouTubePlayer } from './youtube-player';
 
 export function ExerciseDetail({ exercise: e }: { exercise: Exercise }) {
-  const { favorites, toggleFavorite, preferences } = useStore();
+  const { favorites, toggleFavorite, member } = useStore();
   return (
     <div className="exercise-detail-page">
       <Link href="/esercizi" className="back-link">
@@ -54,6 +54,11 @@ export function ExerciseDetail({ exercise: e }: { exercise: Exercise }) {
       )}
       <section className="detail-section">
         <h2>Come si fa</h2>
+        {!e.instructions.length && (
+          <p>
+            Guarda il video scelto dall’allenatore e chiedigli una dimostrazione prima di provarlo.
+          </p>
+        )}
         <ol className="instruction-list">
           {e.instructions.map((s, i) => (
             <li key={s}>
@@ -111,12 +116,26 @@ export function ExerciseDetail({ exercise: e }: { exercise: Exercise }) {
         <ShieldCheck size={18} />
         Se senti dolore, fermati e parlane con l’allenatore.
       </p>
-      {preferences.role === 'coach' && (
+      {member?.role === 'coach' && (
         <Link href={`/allenatore?add=${e.id}`} className="btn btn-primary">
           <Plus size={18} />
           Aggiungi a un allenamento
         </Link>
       )}
+    </div>
+  );
+}
+
+export function ExerciseResolver({ slug }: { slug: string }) {
+  const { exercises, hydrated } = useStore();
+  const exercise = exercises.find((e) => e.slug === slug);
+  if (!hydrated) return <p role="status">Caricamento esercizio…</p>;
+  return exercise ? (
+    <ExerciseDetail exercise={exercise} />
+  ) : (
+    <div className="empty-state">
+      <h1>Esercizio non disponibile</h1>
+      <Link href="/esercizi">Torna agli esercizi</Link>
     </div>
   );
 }

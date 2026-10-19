@@ -1,83 +1,165 @@
 'use client';
+
 import { create } from 'zustand';
-import { initialSnapshot, readSnapshot, writeSnapshot, type Snapshot } from '@/lib/storage';
-import { type UserPreferences, type Workout, type WorkoutSession } from '@/lib/models';
+import { exercises as baseExercises } from '@/data/exercises';
+import { type Exercise, type UserPreferences, type WorkoutSession } from '@/lib/models';
 import { type ActiveWorkout } from '@/lib/player';
-type Store = Snapshot & {
+import {
+  workspaceSchema,
+  type Workspace,
+  type TeamWorkout,
+  type Athlete,
+  type SwimResult,
+} from '@/lib/team-models';
+import { type CustomExerciseInput } from '@/lib/custom-exercises';
+import { api } from '@/lib/client-api';
+import {
+  readPreferences,
+  savePreferences,
+  defaultPreferences,
+  readDevice,
+  saveDevice,
+  clearDevice,
+} from '@/lib/device';
+
+type Store = Workspace & {
   hydrated: boolean;
+  syncing: boolean;
+  connectionError?: string;
   storageError?: string;
-  blocked: boolean;
-  hydrate: () => void;
+  preferences: UserPreferences;
+  favorites: string[];
+  active: ActiveWorkout | null;
+  hydrate: () => Promise<void>;
+  refresh: () => Promise<void>;
   setPreferences: (p: Partial<UserPreferences>) => void;
   toggleFavorite: (id: string) => void;
-  saveWorkout: (w: Workout) => void;
-  deleteWorkout: (id: string) => void;
   setActive: (a: ActiveWorkout | null) => void;
-  saveSession: (s: WorkoutSession) => void;
-  resetStorage: () => void;
+  saveWorkout: (w: TeamWorkout) => Promise<void>;
+  deleteWorkout: (id: string) => Promise<void>;
+  saveSession: (s: WorkoutSession) => Promise<void>;
+  saveExercise: (e: CustomExerciseInput) => Promise<Exercise>;
+  saveAthlete: (a: { id: string; displayName: string; archived: boolean }) => Promise<void>;
+  saveResult: (r: Omit<SwimResult, 'recordedAt'>) => Promise<void>;
+  deleteResult: (id: string) => Promise<void>;
+  createInvite: (athleteId: string | null, role: 'coach' | 'athlete') => Promise<string>;
+  logout: () => Promise<void>;
+};
+const initial: Workspace = {
+  configured: false,
+  status: 'setup-required',
+  user: null,
+  member: null,
+  exercises: baseExercises,
+  workouts: [],
+  athletes: [],
+  results: [],
+  sessions: [],
 };
 export const useStore = create<Store>((set, get) => {
-  function commit(patch: Partial<Snapshot>) {
-    set(patch);
+  function persistDevice() {
     const s = get();
-    if (s.blocked) return;
-    const data: Snapshot = {
-      version: 1,
-      preferences: s.preferences,
-      favorites: s.favorites,
-      workouts: s.workouts,
-      sessions: s.sessions,
-      active: s.active,
-    };
+    if (s.user) set({ storageError: saveDevice(s.user.id, s.favorites, s.active) });
+  }
+  async function refresh() {
+    set({ syncing: true });
     try {
-      set({ storageError: writeSnapshot(localStorage, data) });
-    } catch {
+      const data = workspaceSchema.parse(await api<Workspace>('workspace'));
+      const previousUser = get().user?.id;
+      const device = data.user && previousUser !== data.user.id ? readDevice(data.user.id) : null;
       set({
-        storageError:
-          'Il browser non consente il salvataggio locale. Mantieni aperta l’app ed esporta i dati.',
+        ...data,
+        ...(device
+          ? { favorites: device.favorites, active: device.active, storageError: device.error }
+          : {}),
+        ...(!data.user ? { favorites: [], active: null } : {}),
+        connectionError: undefined,
       });
+    } catch (error) {
+      set({
+        connectionError:
+          error instanceof Error ? error.message : 'Non riusciamo a caricare i dati. Riprova.',
+      });
+    } finally {
+      set({ syncing: false, hydrated: true });
     }
   }
+  async function mutate(path: string, body: unknown, method = 'POST') {
+    const result = await api(path, body, method);
+    await refresh();
+    return result;
+  }
   return {
-    ...initialSnapshot,
+    ...initial,
     hydrated: false,
-    blocked: false,
-    hydrate: () => {
-      try {
-        const result = readSnapshot(localStorage);
-        set({
-          ...result.data,
-          hydrated: true,
-          storageError: result.error,
-          blocked: !!result.error,
-        });
-      } catch {
-        set({
-          hydrated: true,
-          storageError:
-            'Il browser non consente l’accesso ai dati locali. I progressi non saranno conservati.',
-        });
-      }
+    syncing: false,
+    preferences: defaultPreferences,
+    favorites: [],
+    active: null,
+    hydrate: async () => {
+      set({ preferences: readPreferences() });
+      await refresh();
     },
-    setPreferences: (p) => commit({ preferences: { ...get().preferences, ...p } }),
-    toggleFavorite: (id) =>
-      commit({
+    refresh,
+    setPreferences: (p) => {
+      const prefs = { ...get().preferences, ...p, role: get().member?.role || 'athlete' };
+      set({ preferences: prefs, storageError: savePreferences(prefs) });
+    },
+    toggleFavorite: (id) => {
+      set({
         favorites: get().favorites.includes(id)
           ? get().favorites.filter((f) => f !== id)
           : [...get().favorites, id],
-      }),
-    saveWorkout: (w) =>
-      commit({ workouts: [...get().workouts.filter((item) => item.id !== w.id), w] }),
-    deleteWorkout: (id) => commit({ workouts: get().workouts.filter((w) => w.id !== id) }),
-    setActive: (active) => commit({ active }),
-    saveSession: (session) =>
-      commit({
-        sessions: [...get().sessions.filter((s) => s.id !== session.id), session],
+      });
+      persistDevice();
+    },
+    setActive: (active) => {
+      set({ active });
+      persistDevice();
+    },
+    saveWorkout: async (workout) => {
+      await mutate('workouts', workout);
+    },
+    deleteWorkout: async (id) => {
+      await mutate('workouts', { id }, 'DELETE');
+    },
+    saveSession: async (session) => {
+      await api('sessions', session);
+      set({ active: null });
+      persistDevice();
+      await refresh();
+    },
+    saveExercise: async (input) => {
+      const data = await mutate('exercises', input);
+      return data.exercise as Exercise;
+    },
+    saveAthlete: async (athlete) => {
+      await mutate('athletes', athlete);
+    },
+    saveResult: async (result) => {
+      await mutate('results', result);
+    },
+    deleteResult: async (id) => {
+      await mutate('results', { id }, 'DELETE');
+    },
+    createInvite: async (athleteId, role) => {
+      const data = await api<{ token: string }>('team', { action: 'invite', athleteId, role });
+      return data.token;
+    },
+    logout: async () => {
+      await api('auth', { action: 'signout' });
+      const id = get().user?.id;
+      if (id) clearDevice(id);
+      set({
+        ...initial,
+        configured: get().configured,
+        status: 'signed-out',
+        favorites: [],
         active: null,
-      }),
-    resetStorage: () => {
-      set({ blocked: false });
-      commit({});
+      });
+      await refresh();
     },
   };
 });
+// I dati nominativi degli allievi e i tempi restano in memoria, mai in LocalStorage.
+export type { TeamWorkout, Athlete, SwimResult };

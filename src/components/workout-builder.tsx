@@ -13,12 +13,14 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useStore } from '@/state/store';
-import { defaultWorkouts } from '@/data/workouts';
-import { exercises, exerciseById } from '@/data/exercises';
-import { workoutSchema, type Workout } from '@/lib/models';
-import { createWorkoutExercise, estimateWorkoutSeconds } from '@/lib/workouts';
-const emptyWorkout = (): Workout => ({
+import { AccessGate } from './access-gate';
+import { teamWorkoutSchema, type TeamWorkout } from '@/lib/team-models';
+
+import { type Workout } from '@/lib/models';
+import { createWorkoutExercise, estimateWorkoutSeconds, exerciseMap } from '@/lib/workouts';
+const emptyWorkout = (): TeamWorkout => ({
   id: crypto.randomUUID(),
+  published: false,
   name: '',
   description: '',
   rounds: 2,
@@ -33,22 +35,23 @@ const emptyWorkout = (): Workout => ({
   targetAthleteIds: [],
 });
 export function WorkoutBuilder({ editId, addId }: { editId?: string; addId?: string }) {
-  const { preferences, setPreferences, workouts, saveWorkout, deleteWorkout } = useStore();
-  const [draft, setDraft] = useState<Workout>(() => {
-    const found = [...workouts, ...defaultWorkouts].find((w) => w.id === editId);
+  const { member, exercises, athletes, workouts, saveWorkout, deleteWorkout } = useStore();
+  const exerciseById = exerciseMap(exercises);
+  const [draft, setDraft] = useState<TeamWorkout>(() => {
+    const found = workouts.find((w) => w.id === editId);
     const w = found ? structuredClone(found) : emptyWorkout();
     if (found && !found.custom) {
       w.id = crypto.randomUUID();
       w.name = `${w.name} · personalizzato`;
     }
     w.custom = true;
-    if (addId && exerciseById[addId]) w.exercises.push(createWorkoutExercise(addId));
+    if (addId && exerciseById[addId]) w.exercises.push(createWorkoutExercise(addId, exerciseById));
     return w;
   });
   const [selected, setSelected] = useState(addId ?? 'squat'),
     [error, setError] = useState(''),
     [message, setMessage] = useState('');
-  const patch = (value: Partial<Workout>) => {
+  const patch = (value: Partial<TeamWorkout>) => {
     setDraft((d) => ({ ...d, ...value }));
     setMessage('');
   };
@@ -59,48 +62,48 @@ export function WorkoutBuilder({ editId, addId }: { editId?: string; addId?: str
     [items[index], items[index + offset]] = [items[index + offset], items[index]];
     patch({ exercises: items });
   };
-  if (preferences.role !== 'coach')
-    return (
-      <div className="coach-gate panel">
-        <ShieldCheck size={42} />
-        <span className="eyebrow">SPAZIO ALLENATORE</span>
-        <h1>Costruisci il prossimo passo.</h1>
-        <p>Crea programmi, adatta dosi e recuperi, scegli le varianti per i tuoi atleti.</p>
-        <div className="info-banner">
-          <p>
-            Questa modalità è locale e accessibile a chi usa il dispositivo. Non è un sistema di
-            autenticazione o di autorizzazione. I programmi non vengono assegnati o condivisi
-            automaticamente.
-          </p>
-        </div>
-        <button className="btn btn-primary" onClick={() => setPreferences({ role: 'coach' })}>
-          Entra in modalità allenatore
-        </button>
-      </div>
-    );
-  function save() {
-    const result = workoutSchema.safeParse(draft);
+  const [busy, setBusy] = useState(false);
+  if (member?.role !== 'coach') return <AccessGate coach />;
+  async function save() {
+    const result = teamWorkoutSchema.safeParse(draft);
     if (!result.success) {
-      setError(result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join(' · '));
+      const labels: Record<string, string> = {
+        name: 'Nome',
+        exercises: 'Esercizi',
+        rounds: 'Giri',
+        warmupSeconds: 'Riscaldamento',
+        cooldownSeconds: 'Defaticamento',
+      };
+      const issue = result.error.issues[0];
+      setError(`${labels[String(issue.path[0])] || 'Controlla le quantità'}: ${issue.message}`);
       return;
     }
     if (result.data.exercises.some((e) => !exerciseById[e.exerciseId])) {
       setError('Un esercizio non è più disponibile.');
       return;
     }
-    saveWorkout(result.data);
-    setError('');
-    setMessage('Allenamento salvato su questo dispositivo.');
+    setBusy(true);
+    try {
+      await saveWorkout(result.data);
+      setError('');
+      setMessage(
+        draft.published ? 'Allenamento pubblicato per gli atleti selezionati.' : 'Bozza salvata.',
+      );
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Salvataggio non riuscito.');
+    } finally {
+      setBusy(false);
+    }
   }
   let estimated = 0;
   try {
-    estimated = estimateWorkoutSeconds(draft);
+    estimated = estimateWorkoutSeconds(draft, exerciseById);
   } catch {}
   return (
     <>
       <div className="page-heading">
         <div>
-          <span className="eyebrow">MODALITÀ ALLENATORE · LOCALE</span>
+          <span className="eyebrow">SPAZIO ALLENATORE</span>
           <h1>
             Dai forma all’allenamento<span className="teal">.</span>
           </h1>
@@ -126,8 +129,8 @@ export function WorkoutBuilder({ editId, addId }: { editId?: string; addId?: str
       <div className="info-banner">
         <ShieldCheck size={22} />
         <p>
-          Modalità locale senza autenticazione. L’allenatore deve approvare tecnica, dosi e varianti
-          prima dell’assegnazione. I dati rimangono su questo dispositivo.
+          Approva tecnica, dosi e varianti prima di pubblicare. Le bozze sono visibili solo agli
+          allenatori della squadra.
         </p>
       </div>
       <div className="builder-layout">
@@ -174,6 +177,55 @@ export function WorkoutBuilder({ editId, addId }: { editId?: string; addId?: str
                 />
               </label>
             </div>
+            <details className="disclosure mt">
+              <summary>
+                Destinatari:{' '}
+                {draft.targetAthleteIds.length
+                  ? `${draft.targetAthleteIds.length} allievi selezionati`
+                  : 'tutta la squadra'}
+              </summary>
+              <p className="small muted">
+                Per un programma individuale scegli gli allievi. Senza selezioni, il programma è per
+                tutta la squadra.
+              </p>
+              {athletes
+                .filter((a) => !a.archived)
+                .map((a) => (
+                  <label className="checkbox-label" key={a.id}>
+                    <input
+                      type="checkbox"
+                      checked={draft.targetAthleteIds.includes(a.id)}
+                      onChange={(e) =>
+                        patch({
+                          targetAthleteIds: e.target.checked
+                            ? [...draft.targetAthleteIds, a.id]
+                            : draft.targetAthleteIds.filter((id) => id !== a.id),
+                        })
+                      }
+                    />
+                    {a.displayName}
+                  </label>
+                ))}
+              {draft.targetAthleteIds.length > 0 && (
+                <button
+                  className="btn btn-secondary mt"
+                  onClick={() => patch({ targetAthleteIds: [] })}
+                >
+                  Assegna a tutta la squadra
+                </button>
+              )}
+              {!athletes.some((a) => !a.archived) && (
+                <p>Aggiungi gli allievi dal registro per assegnare programmi individuali.</p>
+              )}
+            </details>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={draft.published}
+                onChange={(e) => patch({ published: e.target.checked })}
+              />
+              Pubblica per gli atleti
+            </label>
             <h3>Prima e dopo il circuito</h3>
             <div className="form-grid">
               <label>
@@ -217,6 +269,11 @@ export function WorkoutBuilder({ editId, addId }: { editId?: string; addId?: str
               <h2>Il circuito</h2>
               <span className="tag">{draft.exercises.length} esercizi</span>
             </div>
+            <p>
+              <Link href="/esercizi?nuovo=1" target="_blank" className="text-link">
+                Crea un nuovo esercizio ↗
+              </Link>
+            </p>
             <div className="add-exercise-row">
               <label className="grow">
                 <span className="sr-only">Seleziona esercizio</span>
@@ -233,7 +290,9 @@ export function WorkoutBuilder({ editId, addId }: { editId?: string; addId?: str
               <button
                 className="btn btn-primary"
                 onClick={() =>
-                  patch({ exercises: [...draft.exercises, createWorkoutExercise(selected)] })
+                  patch({
+                    exercises: [...draft.exercises, createWorkoutExercise(selected, exerciseById)],
+                  })
                 }
               >
                 <Plus size={18} />
@@ -422,7 +481,7 @@ export function WorkoutBuilder({ editId, addId }: { editId?: string; addId?: str
                 {message}
               </p>
             )}
-            <button className="btn btn-primary full-width" onClick={save}>
+            <button className="btn btn-primary full-width" disabled={busy} onClick={save}>
               <Save size={18} />
               Salva allenamento
             </button>
@@ -468,9 +527,9 @@ export function WorkoutBuilder({ editId, addId }: { editId?: string; addId?: str
                           name: `${w.name} · copia`.slice(0, 80),
                           exercises: w.exercises.map((e) => ({ ...e, id: crypto.randomUUID() })),
                         };
-                        saveWorkout(copy);
+                        copy.published = false;
                         setDraft(copy);
-                        setMessage('Copia salvata.');
+                        setMessage('Copia pronta: modifica e salva.');
                       }}
                     >
                       <Copy size={17} />
@@ -478,13 +537,20 @@ export function WorkoutBuilder({ editId, addId }: { editId?: string; addId?: str
                     <button
                       className="icon-button danger"
                       aria-label={`Elimina ${w.name}`}
-                      onClick={() => {
+                      onClick={async () => {
                         if (
                           window.confirm(
                             `Eliminare “${w.name}”? Lo storico delle sessioni sarà conservato.`,
                           )
                         ) {
-                          deleteWorkout(w.id);
+                          try {
+                            await deleteWorkout(w.id);
+                          } catch (error) {
+                            setError(
+                              error instanceof Error ? error.message : 'Errore eliminazione',
+                            );
+                            return;
+                          }
                           if (draft.id === w.id) setDraft(emptyWorkout());
                         }
                       }}
@@ -495,27 +561,6 @@ export function WorkoutBuilder({ editId, addId }: { editId?: string; addId?: str
                 </div>
               ))
             )}
-          </section>
-          <section className="panel mt">
-            <h3>Parti da un programma</h3>
-            {defaultWorkouts.map((w) => (
-              <button
-                key={w.id}
-                className="template-button"
-                onClick={() => {
-                  if (!draft.name || window.confirm('Sostituire la bozza con questo modello?'))
-                    setDraft({
-                      ...structuredClone(w),
-                      id: crypto.randomUUID(),
-                      custom: true,
-                      name: `${w.name} · personalizzato`,
-                    });
-                }}
-              >
-                <Copy size={16} />
-                {w.name}
-              </button>
-            ))}
           </section>
         </aside>
       </div>

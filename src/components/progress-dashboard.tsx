@@ -1,10 +1,13 @@
 'use client';
 import { Check, Clock3, CalendarDays, TrendingUp, Waves } from 'lucide-react';
+import { SwimProgress } from './roster';
+import { AccessGate } from './access-gate';
 import { useStore } from '@/state/store';
 import { categories } from '@/lib/models';
 import { localDateKey, weekDays } from '@/lib/workouts';
 export function ProgressDashboard() {
-  const sessions = useStore((s) => s.sessions);
+  const { sessions, results, member } = useStore();
+  if (!member) return <AccessGate />;
   const done = sessions.filter((s) => s.completed);
   const days = weekDays(),
     keys = days.map(localDateKey);
@@ -33,6 +36,7 @@ export function ProgressDashboard() {
           <p>Ritrova gli allenamenti che hai fatto e salvato.</p>
         </div>
       </div>
+      <SwimProgress results={results} />
       <div className="stat-grid">
         <div className="stat">
           <span className="stat-icon">

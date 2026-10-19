@@ -13,12 +13,14 @@ import {
   Moon,
   Sun,
   ShieldCheck,
+  Users,
+  UserRound,
   ArrowRight,
   ArrowLeft,
 } from 'lucide-react';
 import { useStore } from '@/state/store';
 
-const nav = [
+const athleteNav = [
   { href: '/', label: 'Home', icon: House },
   { href: '/allenamenti', label: 'Allenati', icon: Play },
   { href: '/esercizi', label: 'Esercizi', icon: Dumbbell },
@@ -27,7 +29,22 @@ const nav = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
-  const { hydrate, hydrated, preferences, setPreferences, storageError, active } = useStore();
+  const {
+    hydrate,
+    hydrated,
+    preferences,
+    setPreferences,
+    storageError,
+    active,
+    member,
+    user,
+    refresh,
+    connectionError,
+  } = useStore();
+  const nav =
+    member?.role === 'coach'
+      ? [...athleteNav.slice(0, 3), { href: '/allievi', label: 'Allievi', icon: Users }]
+      : athleteNav;
   useEffect(() => {
     hydrate();
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
@@ -36,6 +53,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     document.documentElement.dataset.theme = preferences.theme;
     document.documentElement.style.colorScheme = preferences.theme;
   }, [preferences.theme]);
+  useEffect(() => {
+    if (useStore.getState().hydrated) void refresh();
+  }, [path, refresh]);
+  useEffect(() => {
+    const onFocus = () => {
+      if (useStore.getState().hydrated) void refresh();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [refresh]);
   const training = path.startsWith('/allenamento/');
   const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWith(href));
   return (
@@ -67,7 +94,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ))}
           </nav>
           <div className="sidebar-bottom">
-            {preferences.role === 'coach' && (
+            {member?.role === 'coach' && (
               <Link href="/allenatore" className="nav-link">
                 <ShieldCheck size={20} />
                 Spazio allenatore
@@ -111,6 +138,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {preferences.theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
             </button>
             {!training && (
+              <Link
+                href="/account"
+                className="icon-button"
+                aria-label={user ? 'Il tuo account' : 'Accedi'}
+              >
+                <UserRound size={20} />
+              </Link>
+            )}
+            {!training && (
               <Link href="/impostazioni" className="icon-button" aria-label="Apri impostazioni">
                 <Settings2 size={20} />
               </Link>
@@ -118,6 +154,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
         <main id="contenuto" className="main-content" tabIndex={-1}>
+          {connectionError && (
+            <div className="alert" role="alert">
+              {connectionError}
+              <button className="btn btn-secondary" onClick={() => void refresh()}>
+                Riprova
+              </button>
+            </div>
+          )}
           {storageError && (
             <div className="alert" role="alert">
               {storageError} <Link href="/impostazioni">Gestisci i dati</Link>

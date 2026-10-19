@@ -7,20 +7,18 @@ import { difficultyLabels, type UserPreferences } from '@/lib/models';
 export function Preferences() {
   const store = useStore();
   function exportData() {
-    const raw = store.blocked
-      ? localStorage.getItem(STORAGE_KEY)
-      : JSON.stringify(
-          {
-            version: 1,
-            preferences: store.preferences,
-            favorites: store.favorites,
-            workouts: store.workouts,
-            sessions: store.sessions,
-            active: store.active,
-          },
-          null,
-          2,
-        );
+    const raw = JSON.stringify(
+      {
+        version: 1,
+        preferences: store.preferences,
+        favorites: store.favorites,
+        workouts: store.workouts,
+        sessions: store.sessions,
+        active: store.active,
+      },
+      null,
+      2,
+    );
     const url = URL.createObjectURL(new Blob([raw ?? '{}'], { type: 'application/json' }));
     const anchor = document.createElement('a');
     anchor.href = url;
@@ -89,21 +87,9 @@ export function Preferences() {
             Serve come promemoria. La scelta degli esercizi e delle progressioni rimane da
             concordare con l’allenatore.
           </p>
-          <label>
-            Modalità locale
-            <select
-              value={store.preferences.role}
-              onChange={(e) =>
-                store.setPreferences({ role: e.target.value as UserPreferences['role'] })
-              }
-            >
-              <option value="athlete">Atleta</option>
-              <option value="coach">Allenatore</option>
-            </select>
-          </label>
-          <p className="small muted">
-            Le modalità non sono account e non proteggono l’accesso ai dati.
-          </p>
+          <Link href="/account" className="btn btn-primary">
+            Account e squadra
+          </Link>
           <Link href="/allenatore" className="btn btn-secondary full-width mt">
             <ShieldCheck size={19} />
             Spazio allenatore
@@ -112,34 +98,38 @@ export function Preferences() {
         <aside>
           <section className="panel">
             <ShieldCheck size={30} className="teal" />
-            <h2>I dati restano qui.</h2>
+            <h2>I dati della squadra sono condivisi.</h2>
             <p>
-              Sessioni, preferiti e programmi vengono salvati nel browser di questo dispositivo. Non
-              inserire nomi completi o informazioni sensibili nei programmi.
+              Allenamenti, allievi, tempi e risultati sono salvati nel database della squadra.
+              Preferiti e sessione in corso sono conservati su questo dispositivo, separati per
+              account.
             </p>
             <p>
-              La cancellazione dei dati del browser può eliminare i progressi. Esporta regolarmente
-              una copia.
+              Non inserire dati sanitari o informazioni personali nelle note. Gli archivi locali
+              della versione precedente restano sul dispositivo e puoi esportarli.
             </p>
             <button className="btn btn-secondary full-width" onClick={exportData}>
               <Download size={18} />
               Esporta i dati
             </button>
-            {store.blocked && (
-              <button
-                className="btn btn-danger full-width mt"
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      'Hai esportato i dati originali? Ripristinando il salvataggio saranno sostituiti con i dati attualmente visibili.',
-                    )
-                  )
-                    store.resetStorage();
-                }}
-              >
-                Ripristina salvataggio locale
-              </button>
-            )}
+            <button
+              className="btn btn-ghost full-width mt"
+              onClick={() => {
+                const legacy = localStorage.getItem(STORAGE_KEY);
+                if (!legacy) {
+                  window.alert('Nessun archivio della versione precedente su questo dispositivo.');
+                  return;
+                }
+                const url = URL.createObjectURL(new Blob([legacy], { type: 'application/json' }));
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'swimdryland-archivio-locale.json';
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+            >
+              Esporta archivio della versione precedente
+            </button>
           </section>
           <section className="panel mt">
             <h3>Portala sempre con te</h3>
@@ -148,8 +138,7 @@ export function Preferences() {
               Installa app dal menu del browser.
             </p>
             <p className="small muted">
-              L’interfaccia può riaprirsi offline dopo la prima visita; i video e la ricerca YouTube
-              richiedono Internet.
+              Account, sincronizzazione e video YouTube richiedono Internet.
             </p>
           </section>
         </aside>

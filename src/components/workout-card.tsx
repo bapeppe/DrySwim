@@ -1,42 +1,31 @@
+'use client';
 import Link from 'next/link';
-import { ArrowRight, Clock3, Dumbbell, Waves, Zap } from 'lucide-react';
+import { ArrowRight, Clock3, Dumbbell } from 'lucide-react';
 import type { Workout } from '@/lib/models';
-import { estimateWorkoutSeconds } from '@/lib/workouts';
-const descriptions: Record<string, string> = {
-  'forza-core': 'Rinforza gambe, braccia e addominali.',
-  'esplosivita-stabilita': 'Salti controllati ed esercizi di equilibrio.',
-  'mobilita-controllo': 'Muovi meglio spalle e anche, con calma.',
-};
+import { estimateWorkoutSeconds, exerciseMap } from '@/lib/workouts';
+import { useStore } from '@/state/store';
 export function WorkoutCard({ workout }: { workout: Workout; index?: number }) {
-  const Icon =
-    workout.id === 'esplosivita-stabilita'
-      ? Zap
-      : workout.id === 'mobilita-controllo'
-        ? Waves
-        : Dumbbell;
+  const { exercises, member } = useStore();
   return (
     <Link className="workout-card" href={`/allenamenti/${workout.id}`}>
-      <span
-        className={`workout-symbol ${workout.id === 'esplosivita-stabilita' ? 'symbol-orange' : ''}`}
-      >
-        <Icon size={26} />
+      <span className="workout-symbol">
+        <Dumbbell size={26} />
       </span>
       <div className="workout-card-body">
         <h3>{workout.name}</h3>
-        <p>
-          {descriptions[workout.id] ||
-            workout.description ||
-            'Un programma creato dal tuo allenatore.'}
-        </p>
+        <p>{workout.description || 'Un programma del tuo allenatore.'}</p>
+        {member?.role === 'coach' && (
+          <small>{'published' in workout && workout.published ? 'Pubblicato' : 'Bozza'}</small>
+        )}
         <div className="card-meta">
           <span>
             <Clock3 size={16} />
-            {Math.round(estimateWorkoutSeconds(workout) / 60)} min
+            {Math.round(estimateWorkoutSeconds(workout, exerciseMap(exercises)) / 60)} min
           </span>
           <span>{workout.exercises.length} esercizi</span>
         </div>
       </div>
-      <ArrowRight className="workout-card-arrow" size={22} />
+      <ArrowRight size={22} />
     </Link>
   );
 }

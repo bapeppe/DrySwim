@@ -142,6 +142,40 @@ test('nessun programma predefinito e navigazione responsive', async ({ page }, i
   await expect(page.getByText('Nessun allenamento disponibile')).toBeVisible();
   await page.screenshot({ path: `test-results/empty-${info.project.name}.png`, fullPage: true });
 });
+test('filtro progressi: etichetta e menu nel pannello in entrambi i temi', async ({
+  page,
+}, info) => {
+  await server(page, workspace());
+  await load(page, '/progressi');
+  const filter = page.getByRole('combobox', { name: 'Filtra per allievo' });
+  for (const theme of ['light', 'dark']) {
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+    await expect(filter).toHaveValue(user);
+    const bounds = await filter.evaluate((select) => {
+      const label = select.closest('label')!;
+      const range = document.createRange();
+      range.selectNodeContents(label.firstChild!);
+      const text = range.getBoundingClientRect();
+      const panel = label.getBoundingClientRect();
+      const control = select.getBoundingClientRect();
+      return {
+        textInside: text.top >= panel.top && text.left >= panel.left && text.right <= panel.right,
+        separated: text.bottom < control.top,
+        controlInside:
+          control.left > panel.left && control.right < panel.right && control.bottom < panel.bottom,
+      };
+    });
+    expect(bounds).toEqual({ textInside: true, separated: true, controlInside: true });
+    await filter.selectOption('');
+    await expect(page.getByRole('heading', { name: 'Progressi della squadra' })).toBeVisible();
+    await filter.selectOption(user);
+    await page.screenshot({
+      path: `test-results/progress-filter-${info.project.name}-${theme}.png`,
+      fullPage: true,
+    });
+    if (theme === 'light') await page.getByRole('button', { name: 'Attiva tema scuro' }).click();
+  }
+});
 test('ricerca, filtri, preferiti sul dispositivo e video mancante', async ({ page }) => {
   await server(page, workspace());
   await load(page, '/esercizi');

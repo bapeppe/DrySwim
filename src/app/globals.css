@@ -1564,7 +1564,8 @@ textarea::placeholder {
 .detail-aside {
   min-width: 0;
 }
-.form-panel label {
+.form-panel label,
+label.form-panel {
   display: flex;
   flex-direction: column;
   gap: 8px;

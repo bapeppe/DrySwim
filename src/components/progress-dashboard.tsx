@@ -6,9 +6,17 @@ import { AccessGate } from './access-gate';
 import { useStore } from '@/state/store';
 import { categories } from '@/lib/models';
 import { localDateKey, weekDays } from '@/lib/workouts';
+import { currentProfile, greetingName } from '@/lib/profiles';
 export function ProgressDashboard() {
-  const { sessions: allSessions, results: allResults, athletes, configured } = useStore();
-  const [athleteId, setAthleteId] = useState('');
+  const {
+    sessions: allSessions,
+    results: allResults,
+    athletes,
+    configured,
+    selectedAthleteId,
+  } = useStore();
+  const profile = currentProfile(athletes, selectedAthleteId);
+  const [athleteId, setAthleteId] = useState(selectedAthleteId || '');
   const sessions = athleteId ? allSessions.filter((s) => s.athleteId === athleteId) : allSessions;
   const results = athleteId ? allResults.filter((r) => r.athleteId === athleteId) : [];
   if (!configured) return <AccessGate />;
@@ -36,8 +44,12 @@ export function ProgressDashboard() {
     <>
       <div className="page-heading">
         <div>
-          <h1>Progressi della squadra</h1>
-          <p>Consulta le sessioni condivise o scegli un allievo per i suoi tempi.</p>
+          <h1>
+            {profile && athleteId === profile.id
+              ? `I tuoi progressi, ${greetingName(profile.displayName)}`
+              : 'Progressi della squadra'}
+          </h1>
+          <p>Ritrova sessioni e tempi. Puoi anche consultare il resto della squadra.</p>
         </div>
       </div>
       <label className="panel form-panel">

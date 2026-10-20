@@ -11,9 +11,12 @@ import { doseLabel, estimateWorkoutSeconds, exerciseMap } from '@/lib/workouts';
 import { unlockSound } from '@/lib/audio';
 import { startWorkout, toggleRunning } from '@/lib/player';
 import { WorkoutCard } from './workout-card';
+import { isAssignedTo } from '@/lib/profiles';
 
 export function WorkoutsView() {
-  const { workouts, configured } = useStore();
+  const { workouts, configured, selectedAthleteId } = useStore();
+  const assigned = workouts.filter((w) => w.published && isAssignedTo(w, selectedAthleteId));
+  const others = workouts.filter((w) => !assigned.some((a) => a.id === w.id));
   return (
     <div className="workouts-page">
       <div className="page-heading">
@@ -28,11 +31,21 @@ export function WorkoutsView() {
           </Link>
         )}
       </div>
-      {workouts.length > 0 && (
+      {assigned.length > 0 && (
         <section>
           <h2 className="list-heading">I tuoi programmi</h2>
           <div className="workout-grid">
-            {workouts.map((w) => (
+            {assigned.map((w) => (
+              <WorkoutCard key={w.id} workout={w} />
+            ))}
+          </div>
+        </section>
+      )}
+      {others.length > 0 && (
+        <section className="mt">
+          <h2 className="list-heading">Altri programmi della squadra</h2>
+          <div className="workout-grid">
+            {others.map((w) => (
               <WorkoutCard key={w.id} workout={w} />
             ))}
           </div>

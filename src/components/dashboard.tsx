@@ -3,14 +3,18 @@ import Link from 'next/link';
 import { ArrowRight, Clock3, Dumbbell, Play, Plus, Users } from 'lucide-react';
 import { useStore } from '@/state/store';
 import { estimateWorkoutSeconds, exerciseMap } from '@/lib/workouts';
+import { currentProfile, greetingName, isAssignedTo } from '@/lib/profiles';
 export function Dashboard() {
-  const { active, workouts, configured, team, athletes, exercises } = useStore();
-  const workout = workouts.find((w) => w.published);
+  const { active, workouts, configured, team, athletes, exercises, selectedAthleteId } = useStore();
+  const profile = currentProfile(athletes, selectedAthleteId);
+  const workout = workouts.find((w) => w.published && isAssignedTo(w, selectedAthleteId));
   return (
     <div className="home-page">
       <div className="page-heading">
         <div>
-          <h1>Ciao! Ti va di allenarti?</h1>
+          <h1>
+            {profile ? `Ciao, ${greetingName(profile.displayName)}!` : 'Ciao! Ti va di allenarti?'}
+          </h1>
           <p>{team?.name || 'La tua squadra'} · allenamenti ed esercizi, subito a disposizione.</p>
         </div>
       </div>

@@ -41,9 +41,10 @@ export function WorkoutPlayer({ id }: { id: string }) {
     setPreferences,
     exercises,
     athletes,
+    selectedAthleteId,
   } = useStore();
   const exerciseById = { ...exerciseMap(exercises), ...active?.catalog };
-  const [athleteId, setAthleteId] = useState('');
+  const [athleteId, setAthleteId] = useState(selectedAthleteId || '');
   const [saveError, setSaveError] = useState('');
   const [saving, setSaving] = useState(false);
   const [now, setNow] = useState(() => Date.now());

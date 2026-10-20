@@ -32,13 +32,23 @@ Chi conosce l’indirizzo può leggere e modificare lo spazio condiviso, inclusi
 
 La protezione dei deployment di preview di Vercel è distinta dal login dell’app e dipende dalle impostazioni del progetto Vercel.
 
+## Primo accesso e profilo del dispositivo
+
+Al primo accesso su un nuovo browser o dispositivo, prima delle altre pagine, l’app propone **nome e cognome** oppure **Scegli il tuo nome dalla lista**. La lista mostra gli allievi attivi del registro condiviso, con ricerca per nome o cognome. Non serve ridigitare i dati su un altro dispositivo. Il nome viene salvato nello stesso registro, senza creare account o una seconda anagrafica. Se il nome è già presente viene proposta la scelta della scheda esistente; un retry della stessa creazione non inserisce altri record.
+
+La Home saluta con il nome e propone un programma pubblicato per la persona scelta o per tutta la squadra. Gli altri programmi restano consultabili. Progressi e destinatario della sessione partono dal profilo selezionato; le funzioni di gestione rimangono condivise. Questa selezione **non autentica l’identità e non cambia i permessi**.
+
+Il browser ricorda soltanto l’UUID scelto in `swimdryland:profile:v1`: nome, cognome, elenco allievi e tempi restano nel database e in memoria. In **Impostazioni → Cambia profilo** si può scegliere un’altra persona. Preferiti e sessione in corso sono separati per profilo sul dispositivo; al cambio una sessione in esecuzione viene messa in pausa e conservata. I vecchi dati condivisi non vengono attribuiti automaticamente a una persona.
+
+La schermata ricompare se si cancellano i dati del browser, si cambia browser/dispositivo o si sceglie un profilo archiviato/non più disponibile. Se lo storage è bloccato si può continuare in memoria e l’app segnala che la scelta non sarà ricordata. Se manca la configurazione del database resta consultabile il catalogo pubblico senza fingere di aver salvato un profilo.
+
 ## Come si usa
 
-- **Home**: ripresa della sessione su questo dispositivo oppure un programma pubblicato. Accesso diretto alla gestione della squadra.
+- **Home**: saluto personale, ripresa della propria sessione su questo dispositivo oppure un programma pubblicato pertinente. Accesso diretto alla gestione della squadra.
 - **Allenati**: programmi condivisi, inclusa l’indicazione delle bozze. Le bozze si possono modificare, ma si possono avviare solo i programmi pubblicati e concordati con l’allenatore.
 - **Spazio allenatore**: crea, modifica, duplica, riordina ed elimina programmi. Dosi, serie, giri, ripetizioni, durate, lati, posizioni, pause, riscaldamento e defaticamento sono modificabili. Le assegnazioni indicano a quali allievi è destinato il programma; senza login non limitano la visibilità.
 - **Esercizi**: 52 esercizi base condivisi, ricerca e filtri. Preferiti conservati su questo dispositivo. Gli esercizi personalizzati si aggiungono con nome, modalità, quantità modificabili e link YouTube scelto e revisionato dall’allenatore. Non si duplicano gli esercizi comuni fra categorie.
-- **Player**: riscaldamento, esercizi, recuperi e defaticamento; timer, pausa, ripresa, precedente e salto. L’avanzamento automatico riguarda solo la fase corrente. La sessione in corso contiene una copia degli esercizi per la ripresa sul dispositivo. Al salvataggio si può scegliere facoltativamente un allievo oppure salvare una sessione della squadra senza nome. Errori di connessione permettono di riprovare senza duplicare la sessione. Le sessioni salvate restano uno storico immutabile.
+- **Player**: riscaldamento, esercizi, recuperi e defaticamento; timer, pausa, ripresa, precedente e salto. L’avanzamento automatico riguarda solo la fase corrente. La sessione in corso contiene una copia degli esercizi per la ripresa sul dispositivo. Al salvataggio il proprio nome è già selezionato; si può scegliere un altro allievo oppure salvare una sessione della squadra senza nome. Errori di connessione permettono di riprovare senza duplicare la sessione. Le sessioni salvate restano uno storico immutabile.
 - **Allievi**: aggiunta, ricerca, modifica del nome breve, archiviazione e riattivazione. Nessun invito, email o collegamento account. L’archiviazione conserva lo storico ed esclude l’allievo dalle nuove sessioni e rilevazioni.
 - **Tempi in vasca**: distanza, stile, vasca 25/50 m, data, tempo e gara/allenamento; modifica ed eliminazione. `1.12` significa 1 minuto e 12 secondi; `1:12.34` include i centesimi. I tempi sono salvati in centesimi interi.
 - **Progressi**: sessioni della squadra o filtro per allievo, inclusi gli archiviati. I tempi in vasca richiedono la scelta di un allievo e sono confrontati solo per la stessa persona, distanza, stile e vasca. Nessun confronto tra allievi.
@@ -49,7 +59,7 @@ L’allenatore deve approvare esercizi, dosi e progressioni. Nessun cedimento o 
 
 Le policy `anon` espongono solo lo spazio con `teams.shared_access=true` e il catalogo base. Un indice unico impedisce di avere più spazi aperti. Le squadre precedenti, membership e inviti non sono accessibili senza autenticazione. Il catalogo base non è modificabile dal client. Le API individuano la squadra nel database e non accettano una squadra arbitraria dal browser; le chiavi esterne composte e i trigger impediscono riferimenti ad allievi o esercizi di altre squadre. RLS resta attivo su tutte le tabelle.
 
-Allievi e tempi rimangono nel database e in memoria, **mai in LocalStorage o nella cache PWA**. Il browser conserva solo preferenze, preferiti e sessione in corso nella chiave del dispositivo `swimdryland:device:shared:v2`; questi dati non sono un account e non assegnano permessi. Le risposte API sono `private, no-store`. Il service worker conserva solo asset statici e pagina offline, mai API o HTML di navigazione.
+Allievi e tempi rimangono nel database e in memoria, **mai in LocalStorage o nella cache PWA**. Il browser conserva solo preferenze, preferiti e sessione in corso nelle chiavi del dispositivo `swimdryland:device:<ID-profilo>:v2`, insieme al solo UUID del profilo selezionato; questi dati non sono un account e non assegnano permessi. Le risposte API sono `private, no-store`. Il service worker conserva solo asset statici e pagina offline, mai API o HTML di navigazione.
 
 Gli archivi locali v1 e quelli di precedenti account non vengono cancellati, importati o mescolati automaticamente. Dalle impostazioni si può esportare l’archivio v1. La sincronizzazione dei dati salvati e i video richiedono Internet. La PWA si può aggiungere alla schermata Home da Safari/iOS o installare da Android.
 
@@ -79,6 +89,6 @@ npm run test:e2e
 
 Vitest verifica dominio, dosi, player, video, tempi e conservazione degli archivi. I test PostgreSQL PGlite applicano le migrazioni e verificano sia l’isolamento delle vecchie squadre sia le nuove policy anonime: CRUD condiviso, catalogo immutabile, nessuna escalation, riferimenti esterni negati, bozze non avviabili e storico conservato. Non servono Docker o credenziali.
 
-Playwright verifica mobile e desktop, navigazione senza login, gestione programmi/esercizi/allievi/tempi, filtro per persona, preferiti, player e retry. Le API sono intercettate solo nei test browser; RLS è verificato separatamente su PostgreSQL e sulla preview remota con la sola publishable key. Chromium con viewport iPhone non sostituisce una prova su Safari/iOS fisico.
+Playwright verifica mobile e desktop, primo accesso con nome e cognome, scelta da lista su un secondo dispositivo, cambio profilo e persistenza del solo UUID, navigazione senza login, gestione programmi/esercizi/allievi/tempi, filtro per persona, preferiti, player e retry. Le API sono intercettate solo nei test browser; RLS è verificato separatamente su PostgreSQL e sulla preview remota con la sola publishable key. Chromium con viewport iPhone non sostituisce una prova su Safari/iOS fisico.
 
 GitHub Actions esegue typecheck, lint, test, build e Playwright. Repository `bapeppe/DrySwim`, PR #3, progetto Vercel `bapeppes-projects/dryswim`. Feature branch, Conventional Commits, push e PR verso `main`; nessun force push, merge o deploy in produzione senza autorizzazione. La Git Integration gestisce i deployment. Non versionare `.env`, `.vercel`, token o credenziali; `.env.example` contiene solo segnaposto.

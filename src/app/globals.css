@@ -2302,3 +2302,146 @@ textarea {
   max-width: 620px;
   margin-inline: auto;
 }
+
+/* Primo accesso e scelta del profilo su questo dispositivo. */
+.profile-shell .main-wrap {
+  margin-left: 0;
+}
+.profile-shell .main-content {
+  padding-bottom: 24px;
+}
+.profile-welcome {
+  width: min(100%, 520px);
+  margin: clamp(12px, 5vh, 56px) auto;
+}
+.profile-intro {
+  text-align: center;
+  margin-bottom: 26px;
+}
+.profile-intro h1 {
+  margin: 10px 0;
+  overflow-wrap: anywhere;
+}
+.profile-intro p {
+  color: var(--muted);
+  line-height: 1.6;
+}
+.profile-symbol {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 68px;
+  height: 68px;
+  border-radius: 22px;
+  background: var(--surface-alt);
+  color: var(--primary);
+  margin-bottom: 18px;
+}
+.profile-intro .section-kicker {
+  display: block;
+}
+.profile-card {
+  padding: clamp(20px, 4vw, 32px);
+  display: grid;
+  gap: 18px;
+}
+.profile-card label {
+  margin-top: 0;
+}
+.profile-form {
+  display: grid;
+  gap: 20px;
+}
+.profile-name-fields {
+  display: grid;
+  gap: 18px;
+}
+.profile-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 8px 0;
+}
+.profile-divider::before,
+.profile-divider::after {
+  content: '';
+  height: 1px;
+  background: var(--border);
+  flex: 1;
+}
+.profile-search > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.profile-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: min(42vh, 360px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.profile-list li + li {
+  border-top: 1px solid var(--border);
+}
+.profile-choice {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 10px;
+  text-align: left;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+  font: inherit;
+  min-height: 60px;
+}
+.profile-choice:hover {
+  background: var(--surface-alt);
+}
+.profile-choice > span {
+  flex: 1;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+.profile-choice > svg {
+  color: var(--primary);
+  flex-shrink: 0;
+}
+.profile-footnote {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  margin: 22px 12px;
+}
+.profile-preference {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+.profile-preference > div {
+  flex: 1;
+  min-width: 140px;
+  overflow-wrap: anywhere;
+}
+.profile-preference h2 {
+  margin: 0;
+}
+.profile-preference p {
+  margin: 5px 0;
+}
+@media (min-width: 480px) {
+  .profile-name-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+}

@@ -3,7 +3,8 @@
 import { create } from 'zustand';
 import { exercises as baseExercises } from '@/data/exercises';
 import { type Exercise, type UserPreferences, type WorkoutSession } from '@/lib/models';
-import { type ActiveWorkout } from '@/lib/player';
+import { type ActiveWorkout, toggleRunning } from '@/lib/player';
+import { currentProfile, type NewProfile, type ProfileReply } from '@/lib/profiles';
 import {
   workspaceSchema,
   type Workspace,
@@ -19,6 +20,8 @@ import {
   defaultPreferences,
   readDevice,
   saveDevice,
+  readProfile,
+  saveProfile,
 } from '@/lib/device';
 
 type Store = Workspace & {
@@ -29,6 +32,12 @@ type Store = Workspace & {
   preferences: UserPreferences;
   favorites: string[];
   active: ActiveWorkout | null;
+  selectedAthleteId: string | null;
+  choosingProfile: boolean;
+  selectProfile: (id: string) => void;
+  startProfileChoice: () => void;
+  cancelProfileChoice: () => void;
+  registerProfile: (input: NewProfile) => Promise<ProfileReply>;
   hydrate: () => Promise<void>;
   refresh: () => Promise<void>;
   setPreferences: (p: Partial<UserPreferences>) => void;
@@ -55,7 +64,7 @@ const initial: Workspace = {
 export const useStore = create<Store>((set, get) => {
   function persistDevice() {
     const s = get();
-    set({ storageError: saveDevice('shared', s.favorites, s.active) });
+    set({ storageError: saveDevice(s.selectedAthleteId || 'shared', s.favorites, s.active) });
   }
   async function refresh() {
     set({ syncing: true });
@@ -86,12 +95,57 @@ export const useStore = create<Store>((set, get) => {
     preferences: defaultPreferences,
     favorites: [],
     active: null,
-    hydrate: async () => {
-      const device = readDevice('shared');
+    selectedAthleteId: null,
+    choosingProfile: false,
+    selectProfile: (id) => {
+      const s = get();
+      if (!currentProfile(s.athletes, id))
+        throw new Error('Questo profilo non è più disponibile. Scegline un altro.');
+      if (s.active) {
+        const active = s.active.running ? toggleRunning(s.active, Date.now()) : s.active;
+        const previousError = saveDevice(s.selectedAthleteId || 'shared', s.favorites, active);
+        if (previousError)
+          throw new Error(
+            'Non riusciamo a conservare la sessione in corso. Torna al profilo attuale e salva o scarta la sessione prima di cambiare nome.',
+          );
+      }
+      const device = readDevice(id);
+      const error = saveProfile(id);
       set({
-        preferences: readPreferences(),
+        selectedAthleteId: id,
+        choosingProfile: false,
         favorites: device.favorites,
         active: device.active,
+        storageError: error || device.error,
+      });
+    },
+    startProfileChoice: () => {
+      const s = get();
+      if (s.active?.running) {
+        set({ active: toggleRunning(s.active, Date.now()) });
+        persistDevice();
+      }
+      set({ choosingProfile: true });
+    },
+    cancelProfileChoice: () => set({ choosingProfile: false }),
+    registerProfile: async (input) => {
+      const reply = await api<ProfileReply>('profiles', input);
+      const profiles = reply.kind === 'selected' ? [reply.athlete] : reply.athletes;
+      set((s) => ({
+        athletes: [...s.athletes.filter((a) => !profiles.some((p) => p.id === a.id)), ...profiles],
+      }));
+      if (reply.kind === 'selected') get().selectProfile(reply.athlete.id);
+      void refresh();
+      return reply;
+    },
+    hydrate: async () => {
+      const selectedAthleteId = readProfile();
+      const device = selectedAthleteId ? readDevice(selectedAthleteId) : readDevice('shared');
+      set({
+        selectedAthleteId,
+        preferences: readPreferences(),
+        favorites: device.favorites,
+        active: selectedAthleteId ? device.active : null,
         storageError: device.error,
       });
       await refresh();
@@ -119,7 +173,7 @@ export const useStore = create<Store>((set, get) => {
     deleteWorkout: async (id) => {
       await mutate('workouts', { id }, 'DELETE');
     },
-    saveSession: async (session, athleteId = null) => {
+    saveSession: async (session, athleteId = get().selectedAthleteId) => {
       await api('sessions', { ...session, athleteId });
       set({ active: null });
       persistDevice();

@@ -1,11 +1,13 @@
 'use client';
 import Link from 'next/link';
-import { Download, Moon, ShieldCheck, Sun, Volume2 } from 'lucide-react';
+import { Download, Moon, ShieldCheck, Sun, Volume2, UserRound } from 'lucide-react';
 import { useStore } from '@/state/store';
 import { STORAGE_KEY } from '@/lib/storage';
 import { difficultyLabels, type UserPreferences } from '@/lib/models';
+import { currentProfile } from '@/lib/profiles';
 export function Preferences() {
   const store = useStore();
+  const profile = currentProfile(store.athletes, store.selectedAthleteId);
   function exportData() {
     const raw = JSON.stringify(
       {
@@ -36,6 +38,19 @@ export function Preferences() {
       </div>
       <div className="preferences-layout">
         <section className="panel form-panel">
+          {profile && (
+            <div className="profile-preference">
+              <UserRound size={26} className="teal" />
+              <div>
+                <h2>Il tuo profilo</h2>
+                <p>{profile.displayName}</p>
+                <p className="small muted">La scelta vale su questo dispositivo.</p>
+              </div>
+              <button className="btn btn-secondary" onClick={store.startProfileChoice}>
+                Cambia profilo
+              </button>
+            </div>
+          )}
           <h2>Come preferisci allenarti?</h2>
           <div className="preference-row">
             <div>

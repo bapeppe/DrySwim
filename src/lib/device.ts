@@ -2,6 +2,24 @@ import { z } from 'zod';
 import { preferencesSchema, type UserPreferences } from './models';
 import { activeSchema, type ActiveWorkout } from './player';
 const PREFERENCES = 'swimdryland:preferences:v2';
+const PROFILE = 'swimdryland:profile:v1';
+const profileSchema = z.object({ athleteId: z.string().uuid() });
+export function readProfile(): string | null {
+  try {
+    const raw = localStorage.getItem(PROFILE);
+    return raw ? profileSchema.parse(JSON.parse(raw)).athleteId : null;
+  } catch {
+    return null;
+  }
+}
+export function saveProfile(athleteId: string) {
+  try {
+    localStorage.setItem(PROFILE, JSON.stringify(profileSchema.parse({ athleteId })));
+    return undefined;
+  } catch {
+    return 'Puoi continuare, ma questo browser non riesce a ricordare il profilo. Alla prossima apertura dovrai sceglierlo di nuovo.';
+  }
+}
 const deviceSchema = z.object({ favorites: z.array(z.string()), active: activeSchema.nullable() });
 export const defaultPreferences: UserPreferences = {
   theme: 'light',

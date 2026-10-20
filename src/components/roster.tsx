@@ -6,6 +6,7 @@ import { AccessGate } from './access-gate';
 import { distances, strokes, type SwimResult } from '@/lib/team-models';
 import { parseSwimTime, formatSwimTime, groupSwimResults } from '@/lib/swim-times';
 import { localDateKey } from '@/lib/workouts';
+import { AthleteWorkouts } from './athlete-workouts';
 export function Roster() {
   const { configured, athletes, saveAthlete } = useStore();
   const [query, setQuery] = useState('');
@@ -133,7 +134,8 @@ export function SwimProgress({
   );
 }
 export function AthleteDetail({ id }: { id: string }) {
-  const { configured, athletes, results, saveAthlete, saveResult, deleteResult } = useStore();
+  const { configured, athletes, workouts, results, saveAthlete, saveResult, deleteResult } =
+    useStore();
   const athlete = athletes.find((a) => a.id === id);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -179,6 +181,7 @@ export function AthleteDetail({ id }: { id: string }) {
         </p>
       )}
       {message && <p role="status">{message}</p>}
+      <AthleteWorkouts athlete={athlete} workouts={workouts} />
       {!athlete.archived && (
         <form
           key={editing?.id ?? 'new'}

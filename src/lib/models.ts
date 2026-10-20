@@ -1,4 +1,5 @@
 import { z } from 'zod';
+z.config(z.locales.it());
 export const categoryIds = [
   'mobilita',
   'flessibilita',
@@ -83,13 +84,13 @@ export const exerciseSchema = z.object({
   slug: z.string().min(1),
   name: z.string().min(1),
   categories: z.array(exerciseCategorySchema).min(1),
-  muscleGroups: z.array(z.string()).min(1),
+  muscleGroups: z.array(z.string()),
   difficulty: z.enum(['beginner', 'intermediate', 'advanced']),
   description: z.string().min(20),
   objective: z.string().min(5),
-  swimmingBenefits: z.array(z.string()).min(1),
-  instructions: z.array(z.string()).min(3),
-  commonMistakes: z.array(z.string()).min(1),
+  swimmingBenefits: z.array(z.string()),
+  instructions: z.array(z.string()),
+  commonMistakes: z.array(z.string()),
   safetyNotes: z.array(z.string()).min(1),
   prerequisites: z.array(z.string()),
   easierVariation: z.string(),
@@ -103,6 +104,7 @@ export const exerciseSchema = z.object({
     .regex(/^[\w-]{11}$/)
     .optional(),
   youtubeSearchQuery: z.string(),
+  custom: z.boolean().default(false),
 });
 export type Exercise = z.infer<typeof exerciseSchema>;
 export const workoutExerciseSchema = z.object({

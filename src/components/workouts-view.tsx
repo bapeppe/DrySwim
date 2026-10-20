@@ -4,16 +4,19 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { ArrowLeft, Clock3, Play, Plus, ShieldCheck, Check } from 'lucide-react';
-import { defaultWorkouts } from '@/data/workouts';
-import { exerciseById } from '@/data/exercises';
+import { AccessGate } from './access-gate';
+
 import { useStore } from '@/state/store';
-import { doseLabel, estimateWorkoutSeconds } from '@/lib/workouts';
+import { doseLabel, estimateWorkoutSeconds, exerciseMap } from '@/lib/workouts';
 import { unlockSound } from '@/lib/audio';
 import { startWorkout, toggleRunning } from '@/lib/player';
 import { WorkoutCard } from './workout-card';
+import { isAssignedTo } from '@/lib/profiles';
 
 export function WorkoutsView() {
-  const { workouts, preferences } = useStore();
+  const { workouts, configured, selectedAthleteId } = useStore();
+  const assigned = workouts.filter((w) => w.published && isAssignedTo(w, selectedAthleteId));
+  const others = workouts.filter((w) => !assigned.some((a) => a.id === w.id));
   return (
     <div className="workouts-page">
       <div className="page-heading">
@@ -21,33 +24,48 @@ export function WorkoutsView() {
           <h1>Scegli un allenamento</h1>
           <p>Usa il programma concordato con il tuo allenatore.</p>
         </div>
-        {preferences.role === 'coach' && (
+        {configured && (
           <Link href="/allenatore" className="btn btn-secondary">
             <Plus size={18} />
             Crea allenamento
           </Link>
         )}
       </div>
-      {workouts.length > 0 && (
+      {assigned.length > 0 && (
         <section>
           <h2 className="list-heading">I tuoi programmi</h2>
           <div className="workout-grid">
-            {workouts.map((w) => (
+            {assigned.map((w) => (
               <WorkoutCard key={w.id} workout={w} />
             ))}
           </div>
         </section>
       )}
-      <section>
-        <h2 className="list-heading">
-          {workouts.length ? 'Altri programmi' : 'Da dove vuoi partire?'}
-        </h2>
-        <div className="workout-grid">
-          {defaultWorkouts.map((w) => (
-            <WorkoutCard key={w.id} workout={w} />
-          ))}
+      {others.length > 0 && (
+        <section className="mt">
+          <h2 className="list-heading">Altri programmi della squadra</h2>
+          <div className="workout-grid">
+            {others.map((w) => (
+              <WorkoutCard key={w.id} workout={w} />
+            ))}
+          </div>
+        </section>
+      )}
+      {!workouts.length && (
+        <div className="empty-state">
+          <h2>Nessun allenamento disponibile</h2>
+          <p>
+            {configured
+              ? 'Crea il primo allenamento per la tua squadra.'
+              : 'Qui troverai gli allenamenti pubblicati dal tuo allenatore.'}
+          </p>
+          {configured && (
+            <Link href="/allenatore" className="btn btn-primary">
+              Crea allenamento
+            </Link>
+          )}
         </div>
-      </section>
+      )}
       <p className="quiet-note">
         <ShieldCheck size={18} />
         Prima impari il movimento con l’allenatore, poi lo ripeti a casa.
@@ -57,15 +75,17 @@ export function WorkoutsView() {
 }
 
 export function WorkoutDetail({ id }: { id: string }) {
-  const { workouts, preferences, active, setActive } = useStore();
+  const { workouts, preferences, active, setActive, exercises, configured } = useStore();
+  const exerciseById = exerciseMap(exercises);
   const [approved, setApproved] = useState(false);
   const router = useRouter();
-  const workout = [...defaultWorkouts, ...workouts].find((w) => w.id === id);
+  const workout = workouts.find((w) => w.id === id);
+  if (!configured) return <AccessGate />;
   if (!workout)
     return (
       <div className="empty-state">
         <h1>Allenamento non trovato</h1>
-        <p>I programmi personalizzati sono sul dispositivo dove li hai salvati.</p>
+        <p>Il programma potrebbe essere stato rimosso dalla squadra.</p>
         <Link href="/allenamenti" className="btn btn-primary">
           Torna agli allenamenti
         </Link>
@@ -87,14 +107,14 @@ export function WorkoutDetail({ id }: { id: string }) {
           <div className="today-meta">
             <span>
               <Clock3 size={18} />
-              {Math.round(estimateWorkoutSeconds(workout) / 60)} minuti circa
+              {Math.round(estimateWorkoutSeconds(workout, exerciseById) / 60)} minuti circa
             </span>
             <span>
               {workout.exercises.length} esercizi · {workout.rounds} giri
             </span>
           </div>
         </div>
-        {preferences.role === 'coach' && (
+        {configured && (
           <Link href={`/allenatore?edit=${id}`} className="btn btn-secondary">
             Personalizza
           </Link>
@@ -125,7 +145,12 @@ export function WorkoutDetail({ id }: { id: string }) {
             </p>
           </div>
         )}
-        {active ? (
+        {!workout.published ? (
+          <p className="alert">
+            Questo programma è una bozza. L’allenatore deve approvarlo e pubblicarlo prima di
+            iniziare.
+          </p>
+        ) : active ? (
           <>
             <p>
               Hai già un allenamento {active.finished ? 'da salvare' : 'in corso'}. Prima di
@@ -152,7 +177,9 @@ export function WorkoutDetail({ id }: { id: string }) {
                 if (!approved || active) return;
                 if (preferences.sound) unlockSound();
                 const now = Date.now();
-                setActive(toggleRunning(startWorkout(workout, now, crypto.randomUUID()), now));
+                setActive(
+                  toggleRunning(startWorkout(workout, now, crypto.randomUUID(), exerciseById), now),
+                );
                 router.push(`/allenamento/${workout.id}`);
               }}
             >

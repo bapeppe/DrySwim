@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect } from 'react';
+import { Fragment, useEffect } from 'react';
 import {
   Waves,
   House,
@@ -13,12 +13,15 @@ import {
   Moon,
   Sun,
   ShieldCheck,
+  Users,
   ArrowRight,
   ArrowLeft,
 } from 'lucide-react';
 import { useStore } from '@/state/store';
+import { currentProfile } from '@/lib/profiles';
+import { ProfileWelcome } from './profile-welcome';
 
-const nav = [
+const athleteNav = [
   { href: '/', label: 'Home', icon: House },
   { href: '/allenamenti', label: 'Allenati', icon: Play },
   { href: '/esercizi', label: 'Esercizi', icon: Dumbbell },
@@ -27,7 +30,23 @@ const nav = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
-  const { hydrate, hydrated, preferences, setPreferences, storageError, active } = useStore();
+  const {
+    hydrate,
+    hydrated,
+    preferences,
+    setPreferences,
+    storageError,
+    active,
+    configured,
+    refresh,
+    connectionError,
+    athletes,
+    selectedAthleteId,
+    choosingProfile,
+  } = useStore();
+  const profile = currentProfile(athletes, selectedAthleteId);
+  const needsProfile = hydrated && configured && (!profile || choosingProfile);
+  const nav = [...athleteNav, { href: '/allievi', label: 'Allievi', icon: Users }];
   useEffect(() => {
     hydrate();
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
@@ -36,14 +55,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     document.documentElement.dataset.theme = preferences.theme;
     document.documentElement.style.colorScheme = preferences.theme;
   }, [preferences.theme]);
+  useEffect(() => {
+    if (useStore.getState().hydrated) void refresh();
+  }, [path, refresh]);
+  useEffect(() => {
+    const onFocus = () => {
+      if (useStore.getState().hydrated) void refresh();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [refresh]);
   const training = path.startsWith('/allenamento/');
   const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWith(href));
   return (
-    <div className={`app ${training ? 'training-shell' : ''}`}>
+    <div
+      className={`app ${needsProfile || !hydrated ? 'profile-shell' : training ? 'training-shell' : ''}`}
+    >
       <a href="#contenuto" className="skip-link">
         Vai al contenuto
       </a>
-      {!training && (
+      {hydrated && !training && !needsProfile && (
         <aside className="sidebar">
           <Link href="/" className="brand">
             <span className="brand-icon">
@@ -67,7 +98,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ))}
           </nav>
           <div className="sidebar-bottom">
-            {preferences.role === 'coach' && (
+            {configured && (
               <Link href="/allenatore" className="nav-link">
                 <ShieldCheck size={20} />
                 Spazio allenatore
@@ -87,7 +118,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       )}
       <div className="main-wrap">
         <header className="topbar">
-          {training ? (
+          {training && !needsProfile ? (
             <Link href="/allenamenti" className="back-link">
               <ArrowLeft size={20} />
               Allenamenti
@@ -110,7 +141,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             >
               {preferences.theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
             </button>
-            {!training && (
+            {!training && !needsProfile && (
               <Link href="/impostazioni" className="icon-button" aria-label="Apri impostazioni">
                 <Settings2 size={20} />
               </Link>
@@ -118,12 +149,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
         <main id="contenuto" className="main-content" tabIndex={-1}>
+          {connectionError && (
+            <div className="alert" role="alert">
+              {connectionError}
+              <button className="btn btn-secondary" onClick={() => void refresh()}>
+                Riprova
+              </button>
+            </div>
+          )}
           {storageError && (
             <div className="alert" role="alert">
               {storageError} <Link href="/impostazioni">Gestisci i dati</Link>
             </div>
           )}
-          {hydrated && active && !training && path !== '/' && (
+          {hydrated && !needsProfile && active && !training && path !== '/' && (
             <Link className="resume-banner" href={`/allenamento/${active.workout.id}`}>
               <span>
                 <strong>
@@ -135,7 +174,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
           )}
           {hydrated ? (
-            children
+            needsProfile ? (
+              <ProfileWelcome />
+            ) : (
+              <Fragment key={profile?.id || 'shared'}>{children}</Fragment>
+            )
           ) : (
             <div role="status" className="loading">
               Caricamento…
@@ -149,7 +192,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </footer>
         )}
       </div>
-      {!training && (
+      {hydrated && !training && !needsProfile && (
         <nav className="mobile-nav" aria-label="Navigazione mobile">
           {nav.map((n) => (
             <Link key={n.href} href={n.href} aria-current={isActive(n.href) ? 'page' : undefined}>

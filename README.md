@@ -1,131 +1,94 @@
 # SwimDryland
 
-Web app mobile-first in italiano per allenamenti a secco di una squadra di nuoto (14–17 anni). Programmi senza acquisto di attrezzatura, schede tecniche, timer, builder e progressi reali sul dispositivo.
+Web app in italiano per una squadra di nuoto (14–17 anni), **senza login, registrazione, password o inviti**. Chi apre l’app può consultare e gestire allenamenti, esercizi, allievi e tempi nello stesso spazio condiviso. Non ci sono ruoli personali o programmi predefiniti.
 
-## Stack e requisiti
+## Avvio
 
-Next.js 16 App Router, React 19, TypeScript strict, Tailwind 4, componenti UI con Radix Slot secondo la composizione shadcn/ui, Lucide, Zustand e Zod. Node.js 24 LTS e npm; nessun database, token o variabile d’ambiente necessaria per avviare l’MVP. `package-lock.json` è versionato.
+Node.js 24 LTS, npm e il progetto Supabase DrySwim già esistente per i dati condivisi.
 
 ```sh
 npm ci
+cp .env.example .env.local
 npm run dev
 ```
 
-Apri http://localhost:3000. Per la produzione:
+Aprire http://localhost:3000. Impostare `SUPABASE_URL` e `SUPABASE_PUBLISHABLE_KEY` in `.env.local`; usare una publishable key o una anon key legacy, mai `service_role` o secret key. Il server usa il ruolo PostgreSQL `anon`, senza Supabase Auth, account automatici, cookie di autenticazione o sessioni anonime Auth.
+
+Senza database configurato il catalogo base è consultabile, ma i salvataggi non sono disponibili. L’app non simula operazioni riuscite.
+
+## Database e preview
+
+Le migrazioni vanno applicate in ordine:
+
+1. `supabase/migrations/202610200001_workspace.sql`: schema iniziale e isolamento delle squadre private precedenti.
+2. `supabase/migrations/202610200002_catalog.sql`: 52 esercizi base unici, nessun programma.
+3. `supabase/migrations/20261020102443_shared_team_access.sql`: crea lo spazio condiviso DrySwim e abilita lettura e gestione senza autenticazione tramite RLS.
+
+Su un database già inizializzato applicare solo le migrazioni mancanti. Non cancellare dati né rieseguire lo schema iniziale. La terza migrazione non converte o pubblica squadre private preesistenti: crea un nuovo spazio unico, senza duplicare il catalogo. Gli eventuali dati privati restano nelle tabelle originali con le policy precedenti.
+
+Configurare le due variabili server anche in Vercel **Preview**, sul branch `feat/coach-workspace-database`, e generare la preview tramite Git Integration. Non servono SMTP, conferme email o configurazione dei redirect Auth. Le vecchie pagine `/account` e `/auth/callback` riportano alla Home; le API di account e inviti restituiscono 410 e non creano utenti.
+
+Chi conosce l’indirizzo può leggere e modificare lo spazio condiviso, inclusi nomi brevi, tempi e bozze. Non esiste distinzione di permessi tra allenatore e atleta: è il modello richiesto dalla squadra. Non inserire dati sanitari o altre informazioni sensibili. Non ci sono classifiche.
+
+La protezione dei deployment di preview di Vercel è distinta dal login dell’app e dipende dalle impostazioni del progetto Vercel.
+
+## Primo accesso e profilo del dispositivo
+
+Al primo accesso su un nuovo browser o dispositivo, prima delle altre pagine, l’app propone **nome e cognome** oppure **Scegli il tuo nome dalla lista**. La lista mostra gli allievi attivi del registro condiviso, con ricerca per nome o cognome. Non serve ridigitare i dati su un altro dispositivo. Il nome viene salvato nello stesso registro, senza creare account o una seconda anagrafica. Se il nome è già presente viene proposta la scelta della scheda esistente; un retry della stessa creazione non inserisce altri record.
+
+La Home saluta con il nome e propone un programma pubblicato per la persona scelta o per tutta la squadra. Gli altri programmi restano consultabili. Progressi e destinatario della sessione partono dal profilo selezionato; le funzioni di gestione rimangono condivise. Questa selezione **non autentica l’identità e non cambia i permessi**.
+
+Il browser ricorda soltanto l’UUID scelto in `swimdryland:profile:v1`: nome, cognome, elenco allievi e tempi restano nel database e in memoria. In **Impostazioni → Cambia profilo** si può scegliere un’altra persona. Preferiti e sessione in corso sono separati per profilo sul dispositivo; al cambio una sessione in esecuzione viene messa in pausa e conservata. I vecchi dati condivisi non vengono attribuiti automaticamente a una persona.
+
+La schermata ricompare se si cancellano i dati del browser, si cambia browser/dispositivo o si sceglie un profilo archiviato/non più disponibile. Se lo storage è bloccato si può continuare in memoria e l’app segnala che la scelta non sarà ricordata. Se manca la configurazione del database resta consultabile il catalogo pubblico senza fingere di aver salvato un profilo.
+
+## Come si usa
+
+- **Home**: saluto personale, ripresa della propria sessione su questo dispositivo oppure un programma pubblicato pertinente. Accesso diretto alla gestione della squadra.
+- **Allenati**: programmi condivisi, inclusa l’indicazione delle bozze. Le bozze si possono modificare, ma si possono avviare solo i programmi pubblicati e concordati con l’allenatore.
+- **Spazio allenatore**: crea, modifica, duplica, riordina ed elimina programmi. Dosi, serie, giri, ripetizioni, durate, lati, posizioni, pause, riscaldamento e defaticamento sono modificabili. Le assegnazioni indicano a quali allievi è destinato il programma; senza login non limitano la visibilità.
+- **Esercizi**: 52 esercizi base condivisi, ricerca e filtri. Preferiti conservati su questo dispositivo. Gli esercizi personalizzati si aggiungono con nome, modalità, quantità modificabili e link YouTube scelto e revisionato dall’allenatore. Non si duplicano gli esercizi comuni fra categorie.
+- **Player**: riscaldamento, esercizi, recuperi e defaticamento; timer, pausa, ripresa, precedente e salto. L’avanzamento automatico riguarda solo la fase corrente. La sessione in corso contiene una copia degli esercizi per la ripresa sul dispositivo. Al salvataggio il proprio nome è già selezionato; si può scegliere un altro allievo oppure salvare una sessione della squadra senza nome. Errori di connessione permettono di riprovare senza duplicare la sessione. Le sessioni salvate restano uno storico immutabile.
+- **Allievi**: aggiunta, ricerca, modifica del nome breve, archiviazione e riattivazione. Nessun invito, email o collegamento account. L’archiviazione conserva lo storico ed esclude l’allievo dalle nuove sessioni e rilevazioni.
+- **Tempi in vasca**: distanza, stile, vasca 25/50 m, data, tempo e gara/allenamento; modifica ed eliminazione. `1.12` significa 1 minuto e 12 secondi; `1:12.34` include i centesimi. I tempi sono salvati in centesimi interi.
+- **Progressi**: sessioni della squadra o filtro per allievo, inclusi gli archiviati. I tempi in vasca richiedono la scelta di un allievo e sono confrontati solo per la stessa persona, distanza, stile e vasca. Nessun confronto tra allievi.
+
+L’allenatore deve approvare esercizi, dosi e progressioni. Nessun cedimento o massimale. I salti richiedono prerequisiti e atterraggi controllati. Fermarsi in caso di dolore.
+
+## Dati, RLS e conservazione
+
+Le policy `anon` espongono solo lo spazio con `teams.shared_access=true` e il catalogo base. Un indice unico impedisce di avere più spazi aperti. Le squadre precedenti, membership e inviti non sono accessibili senza autenticazione. Il catalogo base non è modificabile dal client. Le API individuano la squadra nel database e non accettano una squadra arbitraria dal browser; le chiavi esterne composte e i trigger impediscono riferimenti ad allievi o esercizi di altre squadre. RLS resta attivo su tutte le tabelle.
+
+Allievi e tempi rimangono nel database e in memoria, **mai in LocalStorage o nella cache PWA**. Il browser conserva solo preferenze, preferiti e sessione in corso nelle chiavi del dispositivo `swimdryland:device:<ID-profilo>:v2`, insieme al solo UUID del profilo selezionato; questi dati non sono un account e non assegnano permessi. Le risposte API sono `private, no-store`. Il service worker conserva solo asset statici e pagina offline, mai API o HTML di navigazione.
+
+Gli archivi locali v1 e quelli di precedenti account non vengono cancellati, importati o mescolati automaticamente. Dalle impostazioni si può esportare l’archivio v1. La sincronizzazione dei dati salvati e i video richiedono Internet. La PWA si può aggiungere alla schermata Home da Safari/iOS o installare da Android.
+
+## Video e catalogo
+
+I link personalizzati accettano soltanto URL YouTube validati (watch, youtu.be, shorts, embed, live). La validazione dell’URL non certifica il contenuto o la disponibilità: la revisione spetta all’allenatore. Il player usa YouTube IFrame API e youtube-nocookie solo dopo il comando dell’utente, con fallback per errori e timeout. Non scarica video.
+
+Per aggiornare il catalogo comune modificare `src/data/exercises.ts`, oppure il registro dei video base revisionati `src/data/videos.ts`, e rigenerare il seed:
 
 ```sh
-npm run build
-npm start
+npx tsx scripts/generate-catalog-seed.ts
 ```
 
-## Uso
+Per database già inizializzati distribuire gli aggiornamenti con una nuova migrazione, senza alterare migrazioni già applicate. Il registro video iniziale è vuoto e offre il fallback alla ricerca YouTube.
 
-- **Home**: un solo programma in evidenza, il pulsante per aprirlo e la settimana. Se esiste una sessione in corso, l’azione principale diventa Riprendi. Il consiglio ruota per giorno; non sostituisce l’assegnazione dell’allenatore.
-- **Esercizi**: ricerca e preferiti subito disponibili; filtri per categoria, difficoltà, muscoli e occorrente nel pannello Filtri. 52 record unici che coprono tutte le 55 voci originarie. Scapular Push-up, Plank Shoulder Taps e Hollow Body Hold hanno due categorie. Ricerca, filtri cumulativi, ordine alfabetico e preferiti persistenti.
-- **Allenati**: tre programmi con riscaldamento, due giri, recuperi e defaticamento. La schermata programma mette preparazione e pulsante di avvio prima dell’elenco esercizi. L’atleta conferma l’accordo con l’allenatore e avvia direttamente il timer, senza schermate di avvio ripetute.
-- **Player**: tre fasi riconoscibili (Riscaldamento, Esercizi, Recupero finale), pulsante Ho finito per le ripetizioni e Pausa/Riprendi. Passaggi, varianti e video si aprono su richiesta; precedente, salto e interruzione sono in Altre opzioni. Un movimento alla volta, conferma delle serie a ripetizioni, conto alla rovescia per le tenute, recuperi automatici, pausa, salti, ritorno alla fase precedente, interruzione e riepilogo. Il countdown bilaterale include entrambi i lati e indica quando cambiare. Le tre posizioni Y-T-W sono esplicite.
-- **Progressi**: riepilogo e storico in primo piano; grafici e calendario si aprono su richiesta dopo il primo risultato. Solo risultati salvati; sessioni interrotte nello storico ma escluse dal conteggio degli allenamenti completati. Nessuna classifica o dato dimostrativo.
-- **Spazio allenatore**: modalità locale, creazione/modifica/duplicazione/eliminazione di programmi e personalizzazione dei modelli. Riordino accessibile tramite pulsanti su/giù. Serie, lati, posizioni, dosi, ritmo, giri, recuperi e fasi modificabili. Per aggiungere una scheda al builder, aprila in modalità allenatore.
-- **Impostazioni**: raggiungibili anche da smartphone nell’intestazione; tema, livello, suoni, modalità locale, spazio allenatore ed esportazione JSON. I dati non sono sincronizzati. La separazione atleta/allenatore non è autenticazione e non protegge l’accesso.
+## Architettura e verifiche
 
-La durata è la somma delle fasi: ripetizioni × secondi/ripetizione × lati × posizioni × serie × giri, oppure secondi × lati × posizioni per le tenute. Ogni recupero include 8 secondi di cambio posizione; non è aggiunto un recupero extra prima del defaticamento. La durata reale dipende dalle pause e dal ritmo.
-
-Il timer usa scadenze `Date.now()` e non sottrae secondi a ogni tick. Un ritorno dall’altra scheda aggiorna il tempo immediatamente. Solo la fase corrente può terminare automaticamente: l’app non marca come eseguiti gli esercizi successivi durante l’assenza. Le pause esplicite non entrano nella durata attiva; il tempo in background durante una fase avviata sì. Ogni modifica al player viene salvata per riprendere dopo un reload.
-
-## Struttura
-
-```text
-src/app/                 Route App Router, layout, errori, manifest e CSS
-src/components/          Dashboard, schede, player, builder, progressi
-src/components/ui/       Primitive UI riutilizzabili
-src/data/exercises.ts    Catalogo e associazioni per categoria
-src/data/workouts.ts     Tre programmi predefiniti
-src/data/videos.ts       Registro centralizzato dei video verificati
-src/lib/models.ts        Modelli TypeScript e schemi Zod
-src/lib/workouts.ts      Filtri, dosi, calendario, espansione e stime
-src/lib/player.ts        Motore puro di avanzamento e timer
-src/lib/guidance.ts      Istruzioni progressive del riscaldamento
-src/lib/storage.ts       Persistenza validata e gestione errori
-src/state/store.ts       Stato applicativo Zustand
-public/                  Icone e service worker
-tests/                   Test del dominio e test browser responsive
-.github/workflows/       CI delle pull request
-```
-
-## Esercizi e contenuti
-
-Aggiungere una riga in `src/data/exercises.ts`: ID e slug stabili, nome, categoria, dose, muscoli, tre istruzioni specifiche, errori, varianti e attrezzatura. I record finali vengono validati da Zod. Per categorie multiple aggiungere l’associazione allo stesso record, senza duplicarlo. I dosaggi sono proposte iniziali modificabili: per gli intervalli originari si usa un valore rappresentativo, da adattare con l’allenatore. Aggiornare i test del numero di esercizi quando il catalogo cambia intenzionalmente.
-
-I programmi predefiniti mostrano un movimento del riscaldamento alla volta, in base al tempo rimanente: le indicazioni sono in `src/lib/guidance.ts`. Le durate restano quelle del programma. I programmi personalizzati mantengono le istruzioni scritte dall’allenatore.
-
-Gli esercizi unilaterali usano `dose.sides: 2`; le circonduzioni hanno due direzioni; Y-T-W usa `dose.positions: 3`. Non moltiplicare nuovamente le ripetizioni per lato nel builder.
-
-I contenuti sportivi devono essere revisionati e approvati dall’allenatore prima dell’assegnazione. Le varianti avanzate richiedono tecnica acquisita. I salti includono prerequisiti, ammortizzazione, allineamento, recupero e variante senza impatto. Nessuna indicazione al cedimento o a massimali. I benefici descrivono finalità possibili, non risultati garantiti. Il rematore con asciugamano è auto-resistito senza ancoraggio e non equivale al rematore con carico esterno.
-
-Riferimento per i principi di progressione e tecnica nei giovani: [NSCA, Youth Training and Long-Term Athletic Development](https://www.nsca.com/about-us/position-statements/youth-training-and-long-term-athletic-development/).
-
-## Video YouTube
-
-Nessun ID è inventato. Il registro iniziale è vuoto: tutte le schede offrono una ricerca YouTube con **il nome esatto** dell’esercizio e le istruzioni complete rimangono disponibili. Prima di inserire un video, verificarne visualmente esercizio, variante, qualità e istruttore; la disponibilità del link non equivale a una revisione tecnica.
-
-In `src/data/videos.ts`, aggiungere:
-
-```ts
-'squat': {
-  youtubeVideoId: 'ID_VERIFICATO', // sostituire con l’ID reale di 11 caratteri
-  sourceUrl: 'URL_REALE_VERIFICATO',
-  reviewedAt: 'AAAA-MM-GG',
-  reviewedBy: 'Revisore',
-},
-```
-
-`Exercise.youtubeVideoId` viene popolato dal registro. Il player carica la YouTube IFrame Player API e il dominio youtube-nocookie solo dopo l’azione dell’utente, gestisce errori e timeout, distrugge l’iframe al cambio scheda e non controlla il timer dell’allenamento. Non scaricare o redistribuire i video. Richiedono Internet; non vengono memorizzati nella cache offline. [Documentazione ufficiale IFrame API](https://developers.google.com/youtube/iframe_api_reference).
-
-## Persistenza e architettura futura
-
-Chiave `swimdryland:v1`, snapshot versionato con preferenze, preferiti, programmi, sessioni e sessione attiva. Zod valida ogni lettura e scrittura. Un file locale non leggibile viene conservato, il salvataggio viene bloccato e si propone esportazione prima del ripristino. Errori di quota e restrizioni del browser sono visibili. L’esportazione non è un’importazione o una sincronizzazione.
-
-I modelli includono ID stabili, `targetAthleteIds` e sessioni separate dai programmi. Autenticazione, PostgreSQL, autorizzazione server, assegnazioni multi-atleta e sincronizzazione sono estensioni future: sostituire lo strato storage/store con repository e servizi autenticati, mantenendo la logica pura. Non inserire informazioni sensibili o dati sanitari nel browser.
-
-## PWA
-
-Manifest italiano, display standalone, icone PNG 192/512 e SVG, metadati iOS. Il service worker pre-carica le route pubbliche principali e memorizza solo asset statici dello stesso dominio. Le navigazioni usano la rete con fallback alla shell; script caricati vengono conservati. Il primo caricamento, le pagine non ancora disponibili e tutti i video richiedono rete. Non è garantita una prima apertura offline. Aggiornare la versione della cache di `public/sw.js` quando cambiano le strategie di caching. Non memorizzare dati personali nelle risposte della cache.
-
-## Controlli e CI
+Next.js App Router, React, TypeScript strict, Tailwind CSS, Radix Slot, Lucide, Zustand, Zod e Supabase PostgreSQL. Dati, logica, storage e UI sono separati in `src/data`, `src/lib`, `src/state` e `src/components`. Le API sono in `src/app/api`; le migrazioni versionate in `supabase/migrations`.
 
 ```sh
 npm run typecheck
 npm run lint
 npm test
 npm run build
-npx playwright install chromium
 npm run test:e2e
 ```
 
-Vitest verifica schema/catalogo, deduplicazione, filtri, dosi e durata, serie, countdown, pausa/ripresa, recupero, sessioni complete/parziali, persistenza, dati corrotti, calendario e fallback video. Playwright verifica da browser mobile e desktop: assenza di overflow, ricerca e preferiti, video mancanti, builder CRUD/riordino, sessione completa con timer, progressi persistenti, tema e focus tastiera. Chromium emula il viewport iPhone: non è una prova su un dispositivo iOS fisico. La riproduzione di un video reale va verificata quando verrà inserito un ID revisionato.
+Vitest verifica dominio, dosi, player, video, tempi e conservazione degli archivi. I test PostgreSQL PGlite applicano le migrazioni e verificano sia l’isolamento delle vecchie squadre sia le nuove policy anonime: CRUD condiviso, catalogo immutabile, nessuna escalation, riferimenti esterni negati, bozze non avviabili e storico conservato. Non servono Docker o credenziali.
 
-La CI su PR verso `main` usa Node 24 e `npm ci`, cache npm, typecheck, lint, test, build e test browser. Non esegue deployment.
+Playwright verifica mobile e desktop, primo accesso con nome e cognome, scelta da lista su un secondo dispositivo, cambio profilo e persistenza del solo UUID, navigazione senza login, gestione programmi/esercizi/allievi/tempi, filtro per persona, preferiti, player e retry. Le API sono intercettate solo nei test browser; RLS è verificato separatamente su PostgreSQL e sulla preview remota con la sola publishable key. Chromium con viewport iPhone non sostituisce una prova su Safari/iOS fisico.
 
-La verifica iniziale `npm audit --omit=dev` non segnala vulnerabilità di produzione. L’audit completo segnala cinque advisory di sviluppo nella catena `eslint-config-next` → `fast-glob` → `micromatch` → `braces`, senza una correzione compatibile pubblicata al momento della verifica. Non eseguire `npm audit fix --force` indiscriminatamente: proporrebbe un downgrade di Next ESLint a una major precedente.
-
-## Git e Vercel
-
-Branch principale: `main`. Sviluppo MVP: `feat/swim-dryland-mvp`. Conventional Commits, push sul feature branch e pull request; nessun commit diretto o merge automatico su main.
-
-```sh
-git switch -c feat/nome-funzionalita
-npm run check
-git add <file>
-git commit -m "feat: descrizione"
-git push -u origin feat/nome-funzionalita
-```
-
-Progetto remoto: `bapeppe/DrySwim`. Progetto Vercel esistente: `bapeppes-projects/dryswim`. `vercel.json` imposta Next.js e build/install standard, anche se il preset iniziale del progetto era Other. Usare Node 24 nelle impostazioni Vercel. Nessuna variabile d’ambiente richiesta.
-
-La Git Integration deve collegare il repository GitHub al progetto. Il flusso è feature branch → push → preview Vercel → verifica e PR → merge approvato su main → production. Non aggiungere pipeline di deployment GitHub Actions. Un deploy CLI, se necessario per una preview quando l’integrazione non è disponibile, deve rimanere preview; non usare `--prod` senza approvazione.
-
-`.vercel`, `.env*`, token e credenziali sono esclusi dal repository. Il comando `vercel link` può generare `.env.local`: non versionarlo. Gli eventuali segreti futuri vanno nelle variabili d’ambiente server Vercel.
-
-## Limiti espliciti dell’MVP
-
-Nessun account, assegnazione remota, database, sincronizzazione, importazione backup o notifiche push. Tutti i video usano il fallback finché un revisore non registra riferimenti verificati. La revisione tecnica dell’allenatore e la verifica fisica su iOS/Android rimangono necessarie prima dell’uso con la squadra. Nessuna raccolta di dati personali, competizione pubblica o gamification sul volume di lavoro.
+GitHub Actions esegue typecheck, lint, test, build e Playwright. Repository `bapeppe/DrySwim`, PR #3, progetto Vercel `bapeppes-projects/dryswim`. Feature branch, Conventional Commits, push e PR verso `main`; nessun force push, merge o deploy in produzione senza autorizzazione. La Git Integration gestisce i deployment. Non versionare `.env`, `.vercel`, token o credenziali; `.env.example` contiene solo segnaposto.

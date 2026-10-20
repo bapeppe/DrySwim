@@ -1,4 +1,4 @@
-import { exerciseById } from './exercises';
+import { exerciseById } from '@/data/exercises';
 import { workoutSchema, type WorkoutExercise } from '@/lib/models';
 function item(id: string, reps?: number, rest = 40, secondsPerRep = 3): WorkoutExercise {
   const ex = exerciseById[id];

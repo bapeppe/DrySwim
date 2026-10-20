@@ -13,8 +13,8 @@ import {
   VolumeX,
   Waves,
 } from 'lucide-react';
-import { defaultWorkouts } from '@/data/workouts';
-import { exerciseById } from '@/data/exercises';
+
+import { exerciseMap } from '@/lib/workouts';
 import { useStore } from '@/state/store';
 import {
   advance,
@@ -28,18 +28,36 @@ import {
 } from '@/lib/player';
 import { doseLabel, expandWorkout, formatTime } from '@/lib/workouts';
 import { unlockSound, beep } from '@/lib/audio';
-import { warmupCue } from '@/lib/guidance';
+
 import { YouTubePlayer } from './youtube-player';
 
 export function WorkoutPlayer({ id }: { id: string }) {
-  const { active, setActive, workouts, saveSession, preferences, setPreferences } = useStore();
+  const {
+    active,
+    setActive,
+    workouts,
+    saveSession,
+    preferences,
+    setPreferences,
+    exercises,
+    athletes,
+    selectedAthleteId,
+  } = useStore();
+  const exerciseById = { ...exerciseMap(exercises), ...active?.catalog };
+  const [athleteId, setAthleteId] = useState(selectedAthleteId || '');
+  const [saveError, setSaveError] = useState('');
+  const [saving, setSaving] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [approved, setApproved] = useState(false);
   const [saved, setSaved] = useState<'saved' | 'discarded' | null>(null);
   const workout =
-    [...defaultWorkouts, ...workouts].find((w) => w.id === id) ??
-    (active?.workout.id === id ? active.workout : undefined);
+    workouts.find((w) => w.id === id) ?? (active?.workout.id === id ? active.workout : undefined);
+  function begin() {
+    if (!workout) return;
+    unlockSound();
+    setActive(toggleRunning(startWorkout(workout, now, crypto.randomUUID(), exerciseById), now));
+  }
   useEffect(() => {
     const tick = () => setNow(Date.now());
     const timer = window.setInterval(tick, 200);
@@ -51,12 +69,14 @@ export function WorkoutPlayer({ id }: { id: string }) {
   }, []);
   useEffect(() => {
     if (!active || active.finished || !active.running) return;
-    const step = expandWorkout(active.workout)[active.index];
+    const step = expandWorkout(active.workout, { ...exerciseMap(exercises), ...active.catalog })[
+      active.index
+    ];
     if ((step.kind !== 'exercise' || step.dose?.mode === 'time') && remaining(active, now) <= 0) {
       if (preferences.sound) beep();
       setActive(advance(active, now));
     }
-  }, [active, now, preferences.sound, setActive]);
+  }, [active, now, preferences.sound, setActive, exercises]);
 
   if (saved)
     return (
@@ -70,11 +90,11 @@ export function WorkoutPlayer({ id }: { id: string }) {
           Torna alla Home
         </Link>
         <Link href="/progressi" className="text-link">
-          Guarda i tuoi progressi
+          Guarda i progressi della squadra
         </Link>
       </div>
     );
-  if (!workout)
+  if (!workout || (!workouts.find((w) => w.id === id)?.published && active?.workout.id !== id))
     return (
       <div className="empty-state">
         <h1>Programma non disponibile</h1>
@@ -106,15 +126,7 @@ export function WorkoutPlayer({ id }: { id: string }) {
               />
               <span>Ho concordato questo programma con il mio allenatore.</span>
             </label>
-            <button
-              className="btn btn-primary full-width"
-              disabled={!approved}
-              onClick={() => {
-                unlockSound();
-                const t = Date.now();
-                setActive(toggleRunning(startWorkout(workout, t, crypto.randomUUID()), t));
-              }}
-            >
+            <button className="btn btn-primary full-width" disabled={!approved} onClick={begin}>
               <Play size={20} />
               Inizia allenamento
             </button>
@@ -126,7 +138,7 @@ export function WorkoutPlayer({ id }: { id: string }) {
       </div>
     );
 
-  const steps = expandWorkout(active.workout),
+  const steps = expandWorkout(active.workout, { ...exerciseMap(exercises), ...active.catalog }),
     step = steps[active.index],
     ex = step.exerciseId ? exerciseById[step.exerciseId] : undefined;
   const result = toSession(active, now);
@@ -134,8 +146,6 @@ export function WorkoutPlayer({ id }: { id: string }) {
   const totalSets = steps.filter((s) => s.kind === 'exercise').length;
   const timed = step.kind !== 'exercise' || step.dose?.mode === 'time';
   const next = steps.slice(active.index + 1).find((s) => s.kind === 'exercise');
-  const cue =
-    step.kind === 'warmup' ? warmupCue(active.workout, remaining(active, now) / 1000) : null;
   const phase = step.kind === 'warmup' ? 0 : step.kind === 'cooldown' ? 2 : 1;
   const move = (skip = false) => {
     if (preferences.sound) beep();
@@ -178,11 +188,44 @@ export function WorkoutPlayer({ id }: { id: string }) {
             ? 'Salva il risultato, poi prenditi una pausa.'
             : 'Puoi salvare quello che hai fatto. Lo troverai nei progressi come allenamento interrotto.'}
         </p>
+        <label className="form-panel">
+          Allievo (facoltativo)
+          <select
+            value={athleteId}
+            onChange={(e) => setAthleteId(e.target.value)}
+            disabled={saving}
+          >
+            <option value="">Sessione della squadra senza nome</option>
+            {athletes
+              .filter((a) => !a.archived)
+              .map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.displayName}
+                </option>
+              ))}
+          </select>
+        </label>
+        {saveError && (
+          <p role="alert" className="alert">
+            {saveError}
+          </p>
+        )}
         <button
           className="btn btn-primary full-width"
-          onClick={() => {
-            saveSession(toSession(active, Date.now()));
-            setSaved('saved');
+          disabled={saving}
+          onClick={async () => {
+            setSaving(true);
+            setSaveError('');
+            try {
+              await saveSession(toSession(active, Date.now()), athleteId || null);
+              setSaved('saved');
+            } catch (error) {
+              setSaveError(
+                error instanceof Error ? error.message : 'Salvataggio non riuscito. Riprova.',
+              );
+            } finally {
+              setSaving(false);
+            }
           }}
         >
           <Check size={20} />
@@ -293,7 +336,11 @@ export function WorkoutPlayer({ id }: { id: string }) {
           </>
         ) : ex ? (
           <>
-            <p className="movement-cue">{ex.instructions[1]}</p>
+            <p className="movement-cue">
+              {ex.instructions[1] ??
+                ex.instructions[0] ??
+                'Segui la dimostrazione e le indicazioni del tuo allenatore.'}
+            </p>
             {ex.categories.includes('esplosivita') && (
               <p className="player-safety">
                 Atterra piano, piega le ginocchia e tienile in linea con i piedi. Se perdi il
@@ -303,17 +350,7 @@ export function WorkoutPlayer({ id }: { id: string }) {
           </>
         ) : (
           <>
-            {cue ? (
-              <div className="warmup-cue">
-                <span>
-                  Movimento {cue.index} di {cue.total}
-                </span>
-                <h2>{cue.title}</h2>
-                <p>{cue.instruction}</p>
-              </div>
-            ) : (
-              <p className="phase-instructions">{step.text}</p>
-            )}
+            <p className="phase-instructions">{step.text}</p>
           </>
         )}
         <div className="player-primary-controls">

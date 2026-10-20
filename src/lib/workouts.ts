@@ -1,5 +1,5 @@
-import { exerciseById } from '@/data/exercises';
-import { type Dose, type Workout, type WorkoutExercise } from './models';
+import { exerciseById, exercises as baseExercises } from '@/data/exercises';
+import { type Dose, type Workout, type WorkoutExercise, type Exercise } from './models';
 export const TRANSITION_SECONDS = 8;
 export const doseSeconds = (dose: Dose) =>
   Math.ceil(
@@ -21,7 +21,10 @@ export type WorkoutStep = {
   text: string;
   title: string;
 };
-export function expandWorkout(workout: Workout): WorkoutStep[] {
+export function expandWorkout(
+  workout: Workout,
+  catalog: Record<string, Exercise> = exerciseById,
+): WorkoutStep[] {
   const steps: WorkoutStep[] = [
     {
       id: 'warmup',
@@ -35,7 +38,7 @@ export function expandWorkout(workout: Workout): WorkoutStep[] {
   ];
   for (let r = 1; r <= workout.rounds; r++) {
     workout.exercises.forEach((item, i) => {
-      const ex = exerciseById[item.exerciseId];
+      const ex = catalog[item.exerciseId];
       if (!ex) throw new Error(`Esercizio non disponibile: ${item.exerciseId}`);
       for (let s = 1; s <= item.sets; s++) {
         const id = `${r}-${item.id}-${s}`;
@@ -85,10 +88,15 @@ export function expandWorkout(workout: Workout): WorkoutStep[] {
   });
   return steps;
 }
-export const estimateWorkoutSeconds = (workout: Workout) =>
-  expandWorkout(workout).reduce((sum, s) => sum + s.durationSeconds, 0);
-export function createWorkoutExercise(exerciseId: string): WorkoutExercise {
-  const ex = exerciseById[exerciseId];
+export const estimateWorkoutSeconds = (
+  workout: Workout,
+  catalog: Record<string, Exercise> = exerciseById,
+) => expandWorkout(workout, catalog).reduce((sum, s) => sum + s.durationSeconds, 0);
+export function createWorkoutExercise(
+  exerciseId: string,
+  catalog: Record<string, Exercise> = exerciseById,
+): WorkoutExercise {
+  const ex = catalog[exerciseId];
   if (!ex) throw new Error('Esercizio non trovato');
   return {
     id: crypto.randomUUID(),
@@ -105,9 +113,10 @@ export function filterExercises(
   muscle: string,
   equipment: string,
   favorites?: string[],
+  catalog: Exercise[] = baseExercises,
 ) {
   const normalized = query.trim().toLocaleLowerCase('it');
-  return Object.values(exerciseById)
+  return catalog
     .filter(
       (e) =>
         (!normalized || e.name.toLocaleLowerCase('it').includes(normalized)) &&
@@ -135,3 +144,6 @@ export function formatTime(seconds: number) {
   const safe = Math.max(0, Math.ceil(seconds));
   return `${String(Math.floor(safe / 60)).padStart(2, '0')}:${String(safe % 60).padStart(2, '0')}`;
 }
+
+export const exerciseMap = (items: Exercise[]): Record<string, Exercise> =>
+  Object.fromEntries(items.map((e) => [e.id, e]));

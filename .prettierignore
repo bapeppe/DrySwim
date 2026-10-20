@@ -6,3 +6,5 @@ package-lock.json
 playwright-report
 test-results
 public/icon*.png
+
+next-env.d.ts

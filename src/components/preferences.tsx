@@ -1,26 +1,26 @@
 'use client';
 import Link from 'next/link';
-import { Download, Moon, ShieldCheck, Sun, Volume2 } from 'lucide-react';
+import { Download, Moon, ShieldCheck, Sun, Volume2, UserRound } from 'lucide-react';
 import { useStore } from '@/state/store';
 import { STORAGE_KEY } from '@/lib/storage';
 import { difficultyLabels, type UserPreferences } from '@/lib/models';
+import { currentProfile } from '@/lib/profiles';
 export function Preferences() {
   const store = useStore();
+  const profile = currentProfile(store.athletes, store.selectedAthleteId);
   function exportData() {
-    const raw = store.blocked
-      ? localStorage.getItem(STORAGE_KEY)
-      : JSON.stringify(
-          {
-            version: 1,
-            preferences: store.preferences,
-            favorites: store.favorites,
-            workouts: store.workouts,
-            sessions: store.sessions,
-            active: store.active,
-          },
-          null,
-          2,
-        );
+    const raw = JSON.stringify(
+      {
+        version: 1,
+        preferences: store.preferences,
+        favorites: store.favorites,
+        workouts: store.workouts,
+        sessions: store.sessions,
+        active: store.active,
+      },
+      null,
+      2,
+    );
     const url = URL.createObjectURL(new Blob([raw ?? '{}'], { type: 'application/json' }));
     const anchor = document.createElement('a');
     anchor.href = url;
@@ -38,6 +38,19 @@ export function Preferences() {
       </div>
       <div className="preferences-layout">
         <section className="panel form-panel">
+          {profile && (
+            <div className="profile-preference">
+              <UserRound size={26} className="teal" />
+              <div>
+                <h2>Il tuo profilo</h2>
+                <p>{profile.displayName}</p>
+                <p className="small muted">La scelta vale su questo dispositivo.</p>
+              </div>
+              <button className="btn btn-secondary" onClick={store.startProfileChoice}>
+                Cambia profilo
+              </button>
+            </div>
+          )}
           <h2>Come preferisci allenarti?</h2>
           <div className="preference-row">
             <div>
@@ -89,21 +102,6 @@ export function Preferences() {
             Serve come promemoria. La scelta degli esercizi e delle progressioni rimane da
             concordare con l’allenatore.
           </p>
-          <label>
-            Modalità locale
-            <select
-              value={store.preferences.role}
-              onChange={(e) =>
-                store.setPreferences({ role: e.target.value as UserPreferences['role'] })
-              }
-            >
-              <option value="athlete">Atleta</option>
-              <option value="coach">Allenatore</option>
-            </select>
-          </label>
-          <p className="small muted">
-            Le modalità non sono account e non proteggono l’accesso ai dati.
-          </p>
           <Link href="/allenatore" className="btn btn-secondary full-width mt">
             <ShieldCheck size={19} />
             Spazio allenatore
@@ -112,34 +110,37 @@ export function Preferences() {
         <aside>
           <section className="panel">
             <ShieldCheck size={30} className="teal" />
-            <h2>I dati restano qui.</h2>
+            <h2>I dati della squadra sono condivisi.</h2>
             <p>
-              Sessioni, preferiti e programmi vengono salvati nel browser di questo dispositivo. Non
-              inserire nomi completi o informazioni sensibili nei programmi.
+              Allenamenti, allievi, tempi e risultati sono salvati nel database della squadra.
+              Preferiti e sessione in corso sono conservati solo su questo dispositivo.
             </p>
             <p>
-              La cancellazione dei dati del browser può eliminare i progressi. Esporta regolarmente
-              una copia.
+              Non inserire dati sanitari o informazioni personali nelle note. Gli archivi locali
+              della versione precedente restano sul dispositivo e puoi esportarli.
             </p>
             <button className="btn btn-secondary full-width" onClick={exportData}>
               <Download size={18} />
               Esporta i dati
             </button>
-            {store.blocked && (
-              <button
-                className="btn btn-danger full-width mt"
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      'Hai esportato i dati originali? Ripristinando il salvataggio saranno sostituiti con i dati attualmente visibili.',
-                    )
-                  )
-                    store.resetStorage();
-                }}
-              >
-                Ripristina salvataggio locale
-              </button>
-            )}
+            <button
+              className="btn btn-ghost full-width mt"
+              onClick={() => {
+                const legacy = localStorage.getItem(STORAGE_KEY);
+                if (!legacy) {
+                  window.alert('Nessun archivio della versione precedente su questo dispositivo.');
+                  return;
+                }
+                const url = URL.createObjectURL(new Blob([legacy], { type: 'application/json' }));
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'swimdryland-archivio-locale.json';
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+            >
+              Esporta archivio della versione precedente
+            </button>
           </section>
           <section className="panel mt">
             <h3>Portala sempre con te</h3>
@@ -147,10 +148,7 @@ export function Preferences() {
               Su iPhone: in Safari scegli Condividi → Aggiungi alla schermata Home. Su Android: usa
               Installa app dal menu del browser.
             </p>
-            <p className="small muted">
-              L’interfaccia può riaprirsi offline dopo la prima visita; i video e la ricerca YouTube
-              richiedono Internet.
-            </p>
+            <p className="small muted">Sincronizzazione e video YouTube richiedono Internet.</p>
           </section>
         </aside>
       </div>

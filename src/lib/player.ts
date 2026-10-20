@@ -1,11 +1,19 @@
 import { z } from 'zod';
-import { exerciseProgressSchema, workoutSchema, type Workout, type WorkoutSession } from './models';
+import {
+  exerciseProgressSchema,
+  workoutSchema,
+  exerciseSchema,
+  type Exercise,
+  type Workout,
+  type WorkoutSession,
+} from './models';
 import { expandWorkout } from './workouts';
 import { exerciseById } from '@/data/exercises';
 export const activeSchema = z
   .object({
     id: z.string(),
     workout: workoutSchema,
+    catalog: z.record(z.string(), exerciseSchema).default({}),
     index: z.number().int().min(0),
     startedAt: z.string().datetime(),
     running: z.boolean(),
@@ -16,13 +24,25 @@ export const activeSchema = z
     progress: z.array(exerciseProgressSchema),
     finished: z.boolean(),
     endedEarly: z.boolean(),
+    finishedAt: z.string().datetime().optional(),
   })
-  .refine((a) => a.index < expandWorkout(a.workout).length, 'Fase non valida');
+  .refine(
+    (a) => a.index < expandWorkout(a.workout, { ...exerciseById, ...a.catalog }).length,
+    'Fase non valida',
+  );
 export type ActiveWorkout = z.infer<typeof activeSchema>;
-export function startWorkout(workout: Workout, now: number, id: string): ActiveWorkout {
+export function startWorkout(
+  workout: Workout,
+  now: number,
+  id: string,
+  catalog: Record<string, Exercise> = exerciseById,
+): ActiveWorkout {
   return {
     id,
     workout,
+    catalog: Object.fromEntries(
+      workout.exercises.map((e) => [e.exerciseId, catalog[e.exerciseId]]),
+    ),
     index: 0,
     startedAt: new Date(now).toISOString(),
     running: false,
@@ -46,7 +66,7 @@ export function toggleRunning(a: ActiveWorkout, now: number): ActiveWorkout {
 }
 export function advance(a: ActiveWorkout, now: number, skip = false): ActiveWorkout {
   if (a.finished) return a;
-  const steps = expandWorkout(a.workout),
+  const steps = expandWorkout(a.workout, { ...exerciseById, ...a.catalog }),
     step = steps[a.index];
   const progress =
     step.kind === 'exercise'
@@ -68,6 +88,7 @@ export function advance(a: ActiveWorkout, now: number, skip = false): ActiveWork
     progress,
     index: last ? a.index : a.index + 1,
     finished: last,
+    finishedAt: last ? new Date(now).toISOString() : undefined,
     running: last ? false : a.running,
     remainingMs: ms,
     deadline: now + ms,
@@ -77,13 +98,14 @@ export function advance(a: ActiveWorkout, now: number, skip = false): ActiveWork
 }
 export function previous(a: ActiveWorkout, now: number): ActiveWorkout {
   const index = Math.max(0, a.index - 1),
-    steps = expandWorkout(a.workout),
+    steps = expandWorkout(a.workout, { ...exerciseById, ...a.catalog }),
     valid = new Set(steps.slice(0, index).map((s) => s.id)),
     ms = steps[index].durationSeconds * 1000;
   return {
     ...a,
     index,
     finished: false,
+    finishedAt: undefined,
     progress: a.progress.filter((p) => valid.has(p.stepId)),
     remainingMs: ms,
     deadline: now + ms,
@@ -97,19 +119,20 @@ export function endWorkout(a: ActiveWorkout, now: number): ActiveWorkout {
     running: false,
     finished: true,
     endedEarly: true,
+    finishedAt: new Date(now).toISOString(),
     remainingMs: remaining(a, now),
     elapsedMs: elapsed(a, now),
     resumedAt: now,
   };
 }
 export function toSession(a: ActiveWorkout, now: number): WorkoutSession {
-  const steps = expandWorkout(a.workout);
+  const steps = expandWorkout(a.workout, { ...exerciseById, ...a.catalog });
   return {
     id: a.id,
     workoutId: a.workout.id,
     workoutName: a.workout.name,
     startedAt: a.startedAt,
-    completedAt: new Date(now).toISOString(),
+    completedAt: a.finishedAt ?? new Date(now).toISOString(),
     durationSeconds: Math.round(elapsed(a, now) / 1000),
     completed:
       !a.endedEarly &&
@@ -121,7 +144,9 @@ export function toSession(a: ActiveWorkout, now: number): WorkoutSession {
       ...new Set(
         a.progress
           .filter((p) => p.status === 'completed')
-          .flatMap((p) => exerciseById[p.exerciseId]?.categories ?? []),
+          .flatMap(
+            (p) => (a.catalog[p.exerciseId] || exerciseById[p.exerciseId])?.categories ?? [],
+          ),
       ),
     ],
   };

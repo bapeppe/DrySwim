@@ -1,5 +1,4 @@
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { createClient } from '@supabase/supabase-js';
 
 export function databaseConfig() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -12,19 +11,7 @@ export function databaseConfig() {
 export async function serverDatabase() {
   const config = databaseConfig();
   if (!config) throw new Error('DATABASE_NOT_CONFIGURED');
-  const jar = await cookies();
-  return createServerClient(config.url, config.key, {
-    cookieOptions: {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      path: '/',
-    },
-    cookies: {
-      getAll: () => jar.getAll(),
-      setAll: (items) => {
-        for (const { name, value, options } of items) jar.set(name, value, options);
-      },
-    },
+  return createClient(config.url, config.key, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
 }

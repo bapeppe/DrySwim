@@ -32,9 +32,18 @@ import { unlockSound, beep } from '@/lib/audio';
 import { YouTubePlayer } from './youtube-player';
 
 export function WorkoutPlayer({ id }: { id: string }) {
-  const { active, setActive, workouts, saveSession, preferences, setPreferences, exercises } =
-    useStore();
+  const {
+    active,
+    setActive,
+    workouts,
+    saveSession,
+    preferences,
+    setPreferences,
+    exercises,
+    athletes,
+  } = useStore();
   const exerciseById = { ...exerciseMap(exercises), ...active?.catalog };
+  const [athleteId, setAthleteId] = useState('');
   const [saveError, setSaveError] = useState('');
   const [saving, setSaving] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -80,11 +89,11 @@ export function WorkoutPlayer({ id }: { id: string }) {
           Torna alla Home
         </Link>
         <Link href="/progressi" className="text-link">
-          Guarda i tuoi progressi
+          Guarda i progressi della squadra
         </Link>
       </div>
     );
-  if (!workout)
+  if (!workout || (!workouts.find((w) => w.id === id)?.published && active?.workout.id !== id))
     return (
       <div className="empty-state">
         <h1>Programma non disponibile</h1>
@@ -178,6 +187,23 @@ export function WorkoutPlayer({ id }: { id: string }) {
             ? 'Salva il risultato, poi prenditi una pausa.'
             : 'Puoi salvare quello che hai fatto. Lo troverai nei progressi come allenamento interrotto.'}
         </p>
+        <label className="form-panel">
+          Allievo (facoltativo)
+          <select
+            value={athleteId}
+            onChange={(e) => setAthleteId(e.target.value)}
+            disabled={saving}
+          >
+            <option value="">Sessione della squadra senza nome</option>
+            {athletes
+              .filter((a) => !a.archived)
+              .map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.displayName}
+                </option>
+              ))}
+          </select>
+        </label>
         {saveError && (
           <p role="alert" className="alert">
             {saveError}
@@ -190,7 +216,7 @@ export function WorkoutPlayer({ id }: { id: string }) {
             setSaving(true);
             setSaveError('');
             try {
-              await saveSession(toSession(active, Date.now()));
+              await saveSession(toSession(active, Date.now()), athleteId || null);
               setSaved('saved');
             } catch (error) {
               setSaveError(

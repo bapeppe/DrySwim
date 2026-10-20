@@ -1,19 +1,10 @@
 import { z } from 'zod';
 import { exerciseSchema, sessionSchema, workoutSchema } from './models';
 
-export const membershipSchema = z.object({
-  userId: z.string().uuid(),
-  teamId: z.string().uuid(),
-  role: z.enum(['coach', 'athlete']),
-  athleteId: z.string().uuid().nullable(),
-  teamName: z.string(),
-});
-export type Membership = z.infer<typeof membershipSchema>;
 export const athleteSchema = z.object({
   id: z.string().uuid(),
   teamId: z.string().uuid(),
   displayName: z.string().trim().min(1).max(80),
-  linked: z.boolean(),
   archived: z.boolean(),
 });
 export type Athlete = z.infer<typeof athleteSchema>;
@@ -56,18 +47,19 @@ export const swimResultSchema = resultInputSchema.extend({ recordedAt: z.string(
 export type SwimResult = z.infer<typeof swimResultSchema>;
 export const teamWorkoutSchema = workoutSchema.extend({
   published: z.boolean().default(false),
-  createdBy: z.string().uuid().optional(),
 });
 export type TeamWorkout = z.infer<typeof teamWorkoutSchema>;
+export const sharedSessionSchema = sessionSchema.extend({
+  athleteId: z.string().uuid().nullable().default(null),
+});
 export const workspaceSchema = z.object({
   configured: z.boolean(),
-  status: z.enum(['setup-required', 'signed-out', 'onboarding', 'ready']),
-  user: z.object({ id: z.string().uuid(), email: z.string() }).nullable(),
-  member: membershipSchema.nullable(),
+  status: z.enum(['setup-required', 'ready']),
+  team: z.object({ id: z.string().uuid(), name: z.string() }).nullable(),
   exercises: z.array(exerciseSchema),
   workouts: z.array(teamWorkoutSchema),
   athletes: z.array(athleteSchema),
   results: z.array(swimResultSchema),
-  sessions: z.array(sessionSchema),
+  sessions: z.array(sharedSessionSchema),
 });
 export type Workspace = z.infer<typeof workspaceSchema>;

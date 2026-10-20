@@ -35,7 +35,7 @@ const emptyWorkout = (): TeamWorkout => ({
   targetAthleteIds: [],
 });
 export function WorkoutBuilder({ editId, addId }: { editId?: string; addId?: string }) {
-  const { member, exercises, athletes, workouts, saveWorkout, deleteWorkout } = useStore();
+  const { configured, exercises, athletes, workouts, saveWorkout, deleteWorkout } = useStore();
   const exerciseById = exerciseMap(exercises);
   const [draft, setDraft] = useState<TeamWorkout>(() => {
     const found = workouts.find((w) => w.id === editId);
@@ -63,7 +63,7 @@ export function WorkoutBuilder({ editId, addId }: { editId?: string; addId?: str
     patch({ exercises: items });
   };
   const [busy, setBusy] = useState(false);
-  if (member?.role !== 'coach') return <AccessGate coach />;
+  if (!configured) return <AccessGate />;
   async function save() {
     const result = teamWorkoutSchema.safeParse(draft);
     if (!result.success) {
@@ -129,8 +129,8 @@ export function WorkoutBuilder({ editId, addId }: { editId?: string; addId?: str
       <div className="info-banner">
         <ShieldCheck size={22} />
         <p>
-          Approva tecnica, dosi e varianti prima di pubblicare. Le bozze sono visibili solo agli
-          allenatori della squadra.
+          Approva tecnica, dosi e varianti prima di pubblicare. Le bozze sono condivise con la
+          squadra; avvia solo programmi pubblicati e approvati.
         </p>
       </div>
       <div className="builder-layout">

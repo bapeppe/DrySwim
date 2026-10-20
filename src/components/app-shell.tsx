@@ -14,7 +14,6 @@ import {
   Sun,
   ShieldCheck,
   Users,
-  UserRound,
   ArrowRight,
   ArrowLeft,
 } from 'lucide-react';
@@ -36,15 +35,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setPreferences,
     storageError,
     active,
-    member,
-    user,
+    configured,
     refresh,
     connectionError,
   } = useStore();
-  const nav =
-    member?.role === 'coach'
-      ? [...athleteNav.slice(0, 3), { href: '/allievi', label: 'Allievi', icon: Users }]
-      : athleteNav;
+  const nav = [...athleteNav, { href: '/allievi', label: 'Allievi', icon: Users }];
   useEffect(() => {
     hydrate();
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
@@ -94,7 +89,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ))}
           </nav>
           <div className="sidebar-bottom">
-            {member?.role === 'coach' && (
+            {configured && (
               <Link href="/allenatore" className="nav-link">
                 <ShieldCheck size={20} />
                 Spazio allenatore
@@ -137,15 +132,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             >
               {preferences.theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
             </button>
-            {!training && (
-              <Link
-                href="/account"
-                className="icon-button"
-                aria-label={user ? 'Il tuo account' : 'Accedi'}
-              >
-                <UserRound size={20} />
-              </Link>
-            )}
             {!training && (
               <Link href="/impostazioni" className="icon-button" aria-label="Apri impostazioni">
                 <Settings2 size={20} />

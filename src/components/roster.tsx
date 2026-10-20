@@ -7,11 +7,11 @@ import { distances, strokes, type SwimResult } from '@/lib/team-models';
 import { parseSwimTime, formatSwimTime, groupSwimResults } from '@/lib/swim-times';
 import { localDateKey } from '@/lib/workouts';
 export function Roster() {
-  const { member, athletes, saveAthlete } = useStore();
+  const { configured, athletes, saveAthlete } = useStore();
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  if (member?.role !== 'coach') return <AccessGate coach />;
+  if (!configured) return <AccessGate />;
   return (
     <>
       <div className="page-heading">
@@ -59,13 +59,7 @@ export function Roster() {
             <Link className="history-row" href={`/allievi/${a.id}`} key={a.id}>
               <div>
                 <h2>{a.displayName}</h2>
-                <p>
-                  {a.archived
-                    ? 'Archiviato'
-                    : a.linked
-                      ? 'Account collegato'
-                      : 'Account da collegare'}
-                </p>
+                <p>{a.archived ? 'Archiviato' : 'Attivo'}</p>
               </div>
               <span>Apri →</span>
             </Link>
@@ -139,13 +133,11 @@ export function SwimProgress({
   );
 }
 export function AthleteDetail({ id }: { id: string }) {
-  const { member, athletes, results, saveAthlete, saveResult, deleteResult, createInvite } =
-    useStore();
+  const { configured, athletes, results, saveAthlete, saveResult, deleteResult } = useStore();
   const athlete = athletes.find((a) => a.id === id);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
-  const [invite, setInvite] = useState('');
   const [editing, setEditing] = useState<SwimResult | null>(null);
   async function run(work: () => Promise<void>) {
     setBusy(true);
@@ -158,7 +150,7 @@ export function AthleteDetail({ id }: { id: string }) {
       setBusy(false);
     }
   }
-  if (member?.role !== 'coach') return <AccessGate coach />;
+  if (!configured) return <AccessGate />;
   if (!athlete)
     return (
       <div className="empty-state">
@@ -177,9 +169,7 @@ export function AthleteDetail({ id }: { id: string }) {
           <p>
             {athlete.archived
               ? 'Allievo archiviato'
-              : athlete.linked
-                ? 'Account collegato'
-                : 'Invitalo a vedere allenamenti e progressi'}
+              : 'Allenamenti e tempi condivisi della squadra'}
           </p>
         </div>
       </div>
@@ -189,44 +179,6 @@ export function AthleteDetail({ id }: { id: string }) {
         </p>
       )}
       {message && <p role="status">{message}</p>}
-      {!athlete.archived && !athlete.linked && (
-        <section className="panel form-panel">
-          <h2>Collega l’account dell’allievo</h2>
-          <p>
-            Il link vale 7 giorni e si usa una sola volta. Inviarlo all’allievo permetterà di
-            collegare il suo account a questa scheda.
-          </p>
-          <button
-            disabled={busy}
-            className="btn btn-secondary"
-            onClick={() =>
-              run(async () => {
-                const token = await createInvite(id, 'athlete');
-                setInvite(`${window.location.origin}/account?invito=${token}`);
-              })
-            }
-          >
-            Genera invito
-          </button>
-          {invite && (
-            <label>
-              Link di invito
-              <input readOnly value={invite} onFocus={(e) => e.target.select()} />
-              <button
-                className="btn btn-secondary"
-                onClick={() =>
-                  run(async () => {
-                    await navigator.clipboard.writeText(invite);
-                    setMessage('Link copiato.');
-                  })
-                }
-              >
-                Copia link
-              </button>
-            </label>
-          )}
-        </section>
-      )}
       {!athlete.archived && (
         <form
           key={editing?.id ?? 'new'}
@@ -365,7 +317,7 @@ export function AthleteDetail({ id }: { id: string }) {
               window.confirm(
                 athlete.archived
                   ? 'Riattivare l’allievo?'
-                  : 'Archiviare l’allievo? L’account non accederà più alla squadra; lo storico resterà conservato.',
+                  : 'Archiviare l’allievo? Non apparirà fra gli allievi attivi; lo storico resterà conservato.',
               )
             )
               void run(() => saveAthlete({ ...athlete, archived: !athlete.archived }));

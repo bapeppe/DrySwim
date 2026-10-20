@@ -38,40 +38,24 @@ export function databaseError(error: { code?: string; message?: string } | null)
   if (error.code === '23503' || error.code === 'P0001')
     throw new HttpError(
       400,
-      'L’operazione non è disponibile. Controlla l’allievo, gli esercizi o il codice di invito.',
+      'L’operazione non è disponibile. Controlla l’allievo e gli esercizi.',
     );
   if (error.code === '23505')
     throw new HttpError(409, 'Questi dati sono già presenti. Aggiorna la pagina e riprova.');
   throw new HttpError(503, 'Non riusciamo a salvare i dati. Riprova tra poco.');
 }
-export async function context(coach = false) {
+export async function context() {
   if (!databaseConfig())
     throw new HttpError(503, 'Il database della squadra non è ancora configurato.');
   const db = await serverDatabase();
-  const {
-    data: { user },
-    error,
-  } = await db.auth.getUser();
-  if (error || !user) throw new HttpError(401, 'Accedi al tuo account per continuare.');
-  const { data: member, error: memberError } = await db
-    .from('memberships')
-    .select('team_id,role')
-    .eq('user_id', user.id)
+  const { data: team, error } = await db
+    .from('teams')
+    .select('id,name')
+    .eq('shared_access', true)
     .maybeSingle();
-  databaseError(memberError);
-  if (!member)
-    throw new HttpError(403, 'Crea una squadra o usa il tuo invito prima di continuare.');
-  if (coach && member.role !== 'coach')
-    throw new HttpError(403, 'Questa operazione è riservata agli allenatori.');
-  const { data: athlete, error: athleteError } = await db
-    .from('athletes')
-    .select('id,archived')
-    .eq('user_id', user.id)
-    .maybeSingle();
-  databaseError(athleteError);
-  if (member.role === 'athlete' && (!athlete || athlete.archived))
-    throw new HttpError(403, 'L’accesso alla squadra non è attivo. Contatta l’allenatore.');
-  return { db, user, member, athlete };
+  databaseError(error);
+  if (!team) throw new HttpError(503, 'Lo spazio condiviso della squadra deve essere configurato.');
+  return { db, team };
 }
 export async function endpoint(work: () => Promise<Response>) {
   try {

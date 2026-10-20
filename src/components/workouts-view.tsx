@@ -13,7 +13,7 @@ import { startWorkout, toggleRunning } from '@/lib/player';
 import { WorkoutCard } from './workout-card';
 
 export function WorkoutsView() {
-  const { workouts, member } = useStore();
+  const { workouts, configured } = useStore();
   return (
     <div className="workouts-page">
       <div className="page-heading">
@@ -21,7 +21,7 @@ export function WorkoutsView() {
           <h1>Scegli un allenamento</h1>
           <p>Usa il programma concordato con il tuo allenatore.</p>
         </div>
-        {member?.role === 'coach' && (
+        {configured && (
           <Link href="/allenatore" className="btn btn-secondary">
             <Plus size={18} />
             Crea allenamento
@@ -42,19 +42,13 @@ export function WorkoutsView() {
         <div className="empty-state">
           <h2>Nessun allenamento disponibile</h2>
           <p>
-            {member?.role === 'coach'
+            {configured
               ? 'Crea il primo allenamento per la tua squadra.'
               : 'Qui troverai gli allenamenti pubblicati dal tuo allenatore.'}
           </p>
-          {member ? (
-            member.role === 'coach' && (
-              <Link href="/allenatore" className="btn btn-primary">
-                Crea allenamento
-              </Link>
-            )
-          ) : (
-            <Link href="/account" className="btn btn-primary">
-              Accedi alla squadra
+          {configured && (
+            <Link href="/allenatore" className="btn btn-primary">
+              Crea allenamento
             </Link>
           )}
         </div>
@@ -68,17 +62,17 @@ export function WorkoutsView() {
 }
 
 export function WorkoutDetail({ id }: { id: string }) {
-  const { workouts, preferences, active, setActive, exercises, member } = useStore();
+  const { workouts, preferences, active, setActive, exercises, configured } = useStore();
   const exerciseById = exerciseMap(exercises);
   const [approved, setApproved] = useState(false);
   const router = useRouter();
   const workout = workouts.find((w) => w.id === id);
-  if (!member) return <AccessGate />;
+  if (!configured) return <AccessGate />;
   if (!workout)
     return (
       <div className="empty-state">
         <h1>Allenamento non trovato</h1>
-        <p>Il programma potrebbe essere una bozza o non essere assegnato a te.</p>
+        <p>Il programma potrebbe essere stato rimosso dalla squadra.</p>
         <Link href="/allenamenti" className="btn btn-primary">
           Torna agli allenamenti
         </Link>
@@ -107,7 +101,7 @@ export function WorkoutDetail({ id }: { id: string }) {
             </span>
           </div>
         </div>
-        {member?.role === 'coach' && (
+        {configured && (
           <Link href={`/allenatore?edit=${id}`} className="btn btn-secondary">
             Personalizza
           </Link>
@@ -138,7 +132,12 @@ export function WorkoutDetail({ id }: { id: string }) {
             </p>
           </div>
         )}
-        {active ? (
+        {!workout.published ? (
+          <p className="alert">
+            Questo programma è una bozza. L’allenatore deve approvarlo e pubblicarlo prima di
+            iniziare.
+          </p>
+        ) : active ? (
           <>
             <p>
               Hai già un allenamento {active.finished ? 'da salvare' : 'in corso'}. Prima di

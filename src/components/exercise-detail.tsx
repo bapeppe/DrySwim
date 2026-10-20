@@ -8,7 +8,7 @@ import { useStore } from '@/state/store';
 import { YouTubePlayer } from './youtube-player';
 
 export function ExerciseDetail({ exercise: e }: { exercise: Exercise }) {
-  const { favorites, toggleFavorite, member } = useStore();
+  const { favorites, toggleFavorite, configured } = useStore();
   return (
     <div className="exercise-detail-page">
       <Link href="/esercizi" className="back-link">
@@ -116,7 +116,7 @@ export function ExerciseDetail({ exercise: e }: { exercise: Exercise }) {
         <ShieldCheck size={18} />
         Se senti dolore, fermati e parlane con l’allenatore.
       </p>
-      {member?.role === 'coach' && (
+      {configured && (
         <Link href={`/allenatore?add=${e.id}`} className="btn btn-primary">
           <Plus size={18} />
           Aggiungi a un allenamento

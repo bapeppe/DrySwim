@@ -5,7 +5,7 @@ import type { Workout } from '@/lib/models';
 import { estimateWorkoutSeconds, exerciseMap } from '@/lib/workouts';
 import { useStore } from '@/state/store';
 export function WorkoutCard({ workout }: { workout: Workout; index?: number }) {
-  const { exercises, member } = useStore();
+  const { exercises, configured } = useStore();
   return (
     <Link className="workout-card" href={`/allenamenti/${workout.id}`}>
       <span className="workout-symbol">
@@ -14,7 +14,7 @@ export function WorkoutCard({ workout }: { workout: Workout; index?: number }) {
       <div className="workout-card-body">
         <h3>{workout.name}</h3>
         <p>{workout.description || 'Un programma del tuo allenatore.'}</p>
-        {member?.role === 'coach' && (
+        {configured && (
           <small>{'published' in workout && workout.published ? 'Pubblicato' : 'Bozza'}</small>
         )}
         <div className="card-meta">

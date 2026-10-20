@@ -87,9 +87,6 @@ export function Preferences() {
             Serve come promemoria. La scelta degli esercizi e delle progressioni rimane da
             concordare con l’allenatore.
           </p>
-          <Link href="/account" className="btn btn-primary">
-            Account e squadra
-          </Link>
           <Link href="/allenatore" className="btn btn-secondary full-width mt">
             <ShieldCheck size={19} />
             Spazio allenatore
@@ -101,8 +98,7 @@ export function Preferences() {
             <h2>I dati della squadra sono condivisi.</h2>
             <p>
               Allenamenti, allievi, tempi e risultati sono salvati nel database della squadra.
-              Preferiti e sessione in corso sono conservati su questo dispositivo, separati per
-              account.
+              Preferiti e sessione in corso sono conservati solo su questo dispositivo.
             </p>
             <p>
               Non inserire dati sanitari o informazioni personali nelle note. Gli archivi locali
@@ -137,9 +133,7 @@ export function Preferences() {
               Su iPhone: in Safari scegli Condividi → Aggiungi alla schermata Home. Su Android: usa
               Installa app dal menu del browser.
             </p>
-            <p className="small muted">
-              Account, sincronizzazione e video YouTube richiedono Internet.
-            </p>
+            <p className="small muted">Sincronizzazione e video YouTube richiedono Internet.</p>
           </section>
         </aside>
       </div>

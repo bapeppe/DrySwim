@@ -19,8 +19,8 @@ describe('API e fallback configurazione', () => {
     expect(data.athletes).toEqual([]);
     expect(data.exercises).toHaveLength(52);
   });
-  it('rifiuta salvataggi e login quando il database non è configurato', async () => {
-    for (const call of [workoutPost, authPost]) {
+  it('rifiuta salvataggi quando il database non è configurato', async () => {
+    for (const call of [workoutPost]) {
       const response = await call(
         new Request('https://app.test/api/test', {
           method: 'POST',
@@ -30,6 +30,9 @@ describe('API e fallback configurazione', () => {
       expect(response.status).toBe(503);
       expect(await response.json()).not.toHaveProperty('ok', true);
     }
+  });
+  it('ritira il vecchio endpoint login senza creare account', async () => {
+    expect(authPost().status).toBe(410);
   });
   it('blocca invii da un’altra origine e JSON non valido', async () => {
     await expect(

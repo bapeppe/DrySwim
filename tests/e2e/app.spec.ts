@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { exercises } from '../../src/data/exercises';
-import { type Workspace, type TeamWorkout, type SwimResult } from '../../src/lib/team-models';
+import { type Workspace, type TeamWorkout } from '../../src/lib/team-models';
 import { makeCustomExercise } from '../../src/lib/custom-exercises';
 const user = '10000000-0000-4000-8000-000000000001',
   team = '20000000-0000-4000-8000-000000000001',
@@ -36,18 +36,11 @@ const plan: TeamWorkout = {
     },
   ],
 };
-function workspace(role: 'coach' | 'athlete' = 'athlete'): Workspace {
+function workspace(): Workspace {
   return {
     configured: true,
     status: 'ready',
-    user: { id: user, email: 'test@example.test' },
-    member: {
-      userId: user,
-      teamId: team,
-      role,
-      athleteId: role === 'athlete' ? student : null,
-      teamName: 'Squadra test',
-    },
+    team: { id: team, name: 'Squadra test' },
     exercises: structuredClone(exercises),
     workouts: [],
     athletes: [],
@@ -79,7 +72,7 @@ async function server(page: Page, data: Workspace) {
     } else if (path === '/api/athletes') {
       state.athletes = [
         ...state.athletes.filter((a) => a.id !== body.id),
-        { ...body, teamId: team, linked: false },
+        { ...body, teamId: team },
       ];
     } else if (path === '/api/results') {
       state.results = state.results.filter((r) => r.id !== body.id);
@@ -90,15 +83,8 @@ async function server(page: Page, data: Workspace) {
         status = 503;
         result = { error: 'Connessione interrotta. Riprova.' };
       } else if (!state.sessions.some((s) => s.id === body.id)) state.sessions.push(body);
-    } else if (path === '/api/auth' && body.action === 'signout') {
-      state.user = null;
-      state.member = null;
-      state.status = 'signed-out';
-      state.athletes = [];
-      state.results = [];
-      state.workouts = [];
-      state.sessions = [];
-    } else if (path === '/api/team') result = { token: 'a'.repeat(64) };
+    }
+
     await route.fulfill({ status, json: result });
   });
   return {
@@ -132,7 +118,7 @@ test('nessun programma predefinito e navigazione responsive', async ({ page }, i
   await expect(page.getByText('Nessun allenamento disponibile')).toBeVisible();
   await page.screenshot({ path: `test-results/empty-${info.project.name}.png`, fullPage: true });
 });
-test('ricerca, filtri, preferiti per account e video mancante', async ({ page }) => {
+test('ricerca, filtri, preferiti sul dispositivo e video mancante', async ({ page }) => {
   await server(page, workspace());
   await load(page, '/esercizi');
   await page.getByLabel('Cerca un esercizio').fill('Wall Angels');
@@ -156,7 +142,7 @@ test('ricerca, filtri, preferiti per account e video mancante', async ({ page })
 test('allenatore: crea esercizio, circuito, pubblica, riordina, duplica ed elimina', async ({
   page,
 }, info) => {
-  const { state } = await server(page, workspace('coach'));
+  const { state } = await server(page, workspace());
   await load(page, '/esercizi');
   await page.getByRole('button', { name: 'Aggiungi esercizio', exact: true }).click();
   await page.getByLabel('Nome dell’esercizio', { exact: true }).fill('Mobilità coach');
@@ -188,7 +174,7 @@ test('allenatore: crea esercizio, circuito, pubblica, riordina, duplica ed elimi
   expect(state.workouts[0].published).toBe(true);
 });
 test('allievi e storico: 1.12 è un minuto e dodici secondi', async ({ page }, info) => {
-  const { state } = await server(page, workspace('coach'));
+  const { state } = await server(page, workspace());
   await load(page, '/allievi');
   await page.getByLabel('Nome o nome breve').fill('Luca');
   await page.getByRole('button', { name: 'Aggiungi allievo', exact: true }).click();
@@ -203,16 +189,19 @@ test('allievi e storico: 1.12 è un minuto e dodici secondi', async ({ page }, i
   await page.getByRole('button', { name: 'Salva tempo', exact: true }).click();
   await expect(page.locator('.swim-history li')).toHaveCount(2);
   await expect(page.getByText(/Variazione dal primo/)).toContainText('−1.50 s');
-  await page.getByRole('button', { name: 'Genera invito' }).click();
-  await expect(page.getByLabel('Link di invito')).toHaveValue(/invito=a{64}/);
+  await expect(page.getByRole('button', { name: 'Genera invito' })).toHaveCount(0);
   await page.screenshot({ path: `test-results/roster-${info.project.name}.png`, fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const local = await page.evaluate(() => JSON.stringify({ ...localStorage }));
   expect(local).not.toContain('Luca');
   expect(local).not.toContain('centiseconds');
 });
-test('atleta: aree allenatore protette e propri tempi consultabili', async ({ page }) => {
+test('nessun login: gestione aperta e tempi separati per allievo', async ({ page }) => {
   const data = workspace();
+  data.athletes = [
+    { id: student, teamId: team, displayName: 'Luca', archived: false },
+    { id: user, teamId: team, displayName: 'Anna', archived: false },
+  ];
   data.results = [
     {
       id: user,
@@ -225,25 +214,42 @@ test('atleta: aree allenatore protette e propri tempi consultabili', async ({ pa
       kind: 'race',
       note: '',
       recordedAt: '2026-10-20T12:00:00Z',
-    } as SwimResult,
+    },
+    {
+      id: student,
+      athleteId: user,
+      distance: 100,
+      stroke: 'medley',
+      poolLength: 25,
+      date: '2026-10-20',
+      centiseconds: 6500,
+      kind: 'race',
+      note: '',
+      recordedAt: '2026-10-20T12:00:00Z',
+    },
   ];
   await server(page, data);
-  for (const path of ['/allenatore', '/allievi']) {
-    await load(page, path);
-    await expect(page.getByRole('button', { name: 'Aggiungi allievo' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Salva allenamento' })).toHaveCount(0);
-  }
+  await load(page, '/allenatore');
+  await expect(page.getByRole('button', { name: 'Salva allenamento', exact: true })).toBeVisible();
+  await page.goto('/allievi');
+  await expect(page.getByRole('button', { name: 'Aggiungi allievo', exact: true })).toBeVisible();
   await page.goto('/esercizi');
-  await expect(page.getByRole('button', { name: 'Aggiungi esercizio', exact: true })).toHaveCount(
-    0,
-  );
+  await expect(page.getByRole('button', { name: 'Aggiungi esercizio', exact: true })).toBeVisible();
   await page.goto('/progressi');
+  await expect(page.locator('.swim-history')).toHaveCount(0);
+  await page.getByLabel('Filtra per allievo').selectOption(student);
   await expect(page.locator('.swim-history')).toContainText('1:12.00');
-  await expect(page.getByRole('button', { name: 'Modifica', exact: true })).toHaveCount(0);
+  await expect(page.locator('.swim-history')).not.toContainText('1:05.00');
+  await page.getByLabel('Filtra per allievo').selectOption(user);
+  await expect(page.locator('.swim-history')).toContainText('1:05.00');
+  await page.goto('/account');
+  await expect(page).toHaveURL('/');
+  await expect(page.getByRole('textbox', { name: /email|password/i })).toHaveCount(0);
 });
 test('player: pausa, recupero, countdown, salvataggio fallito e ripresa', async ({ page }) => {
   const data = workspace();
   data.workouts = [plan];
+  data.athletes = [{ id: student, teamId: team, displayName: 'Luca', archived: false }];
   const fake = await server(page, data);
   await load(page, `/allenamenti/${workoutId}`);
   await page.getByRole('checkbox').check();
@@ -266,6 +272,7 @@ test('player: pausa, recupero, countdown, salvataggio fallito e ripresa', async 
   await page.clock.fastForward(6000);
   await page.clock.fastForward(61000);
   await expect(page.getByRole('heading', { name: 'Allenamento finito!' })).toBeVisible();
+  await page.getByLabel('Allievo (facoltativo)').selectOption(student);
   fake.failSession(true);
   await page.getByRole('button', { name: 'Salva il risultato' }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Connessione interrotta' })).toBeVisible();
@@ -273,12 +280,13 @@ test('player: pausa, recupero, countdown, salvataggio fallito e ripresa', async 
   fake.failSession(false);
   await page.getByRole('button', { name: 'Salva il risultato' }).click();
   await expect(page.getByRole('heading', { name: 'Allenamento salvato!' })).toBeVisible();
+  expect(fake.state.sessions[0].athleteId).toBe(student);
   await page.goto('/progressi');
   await expect(page.locator('.history-row')).toHaveCount(1);
   await page.reload();
   await expect(page.locator('.history-row')).toContainText('Completato');
 });
-test('tema, tastiera e logout rimuovono i dati del precedente account', async ({ page }) => {
+test('tema, tastiera e preferiti rimangono sul dispositivo senza account', async ({ page }) => {
   await server(page, workspace());
   await load(page);
   await page.getByRole('button', { name: 'Attiva tema scuro' }).click();
@@ -289,18 +297,30 @@ test('tema, tastiera e logout rimuovono i dati del precedente account', async ({
   await page.goto('/esercizi');
   await page.getByRole('button', { name: 'Aggiungi ai preferiti: Wall Angels' }).click();
   await page.goto('/account');
-  await page.getByRole('button', { name: 'Esci dal tuo account' }).click();
-  await expect(page.getByRole('heading', { name: 'Accedi alla squadra' })).toBeVisible();
-  expect(
-    await page.evaluate(() => Object.keys(localStorage).filter((k) => k.includes(':device:'))),
-  ).toEqual([]);
+  await expect(page).toHaveURL('/');
+  await page.goto('/esercizi');
+  await page.getByRole('button', { name: 'Preferiti', exact: true }).click();
+  await expect(page.locator('.exercise-card')).toHaveCount(1);
 });
 test('database non configurato: catalogo pubblico e messaggio esplicito', async ({ page }) => {
   const data = workspace();
-  Object.assign(data, { configured: false, status: 'setup-required', user: null, member: null });
+  Object.assign(data, { configured: false, status: 'setup-required', team: null });
   await server(page, data);
   await load(page, '/account');
-  await expect(page.getByRole('heading', { name: 'Attiviamo la tua squadra' })).toBeVisible();
-  await page.getByRole('link', { name: 'Intanto esplora gli esercizi' }).click();
+  await expect(page.getByRole('heading', { name: 'La squadra non è ancora attiva' })).toBeVisible();
+  await page.getByRole('link', { name: 'Esplora gli esercizi', exact: true }).click();
   await expect(page.locator('.exercise-card')).toHaveCount(52);
+});
+
+test('bozze condivise visibili, senza avvio prima della pubblicazione', async ({ page }) => {
+  const data = workspace();
+  data.workouts = [{ ...plan, published: false }];
+  await server(page, data);
+  await load(page, `/allenamenti/${workoutId}`);
+  await expect(page.getByText(/deve approvarlo e pubblicarlo/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Inizia allenamento', exact: true })).toHaveCount(
+    0,
+  );
+  await page.goto(`/allenamento/${workoutId}`);
+  await expect(page.getByRole('heading', { name: 'Programma non disponibile' })).toBeVisible();
 });

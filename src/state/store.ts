@@ -19,7 +19,6 @@ import {
   defaultPreferences,
   readDevice,
   saveDevice,
-  clearDevice,
 } from '@/lib/device';
 
 type Store = Workspace & {
@@ -37,19 +36,16 @@ type Store = Workspace & {
   setActive: (a: ActiveWorkout | null) => void;
   saveWorkout: (w: TeamWorkout) => Promise<void>;
   deleteWorkout: (id: string) => Promise<void>;
-  saveSession: (s: WorkoutSession) => Promise<void>;
+  saveSession: (s: WorkoutSession, athleteId?: string | null) => Promise<void>;
   saveExercise: (e: CustomExerciseInput) => Promise<Exercise>;
   saveAthlete: (a: { id: string; displayName: string; archived: boolean }) => Promise<void>;
   saveResult: (r: Omit<SwimResult, 'recordedAt'>) => Promise<void>;
   deleteResult: (id: string) => Promise<void>;
-  createInvite: (athleteId: string | null, role: 'coach' | 'athlete') => Promise<string>;
-  logout: () => Promise<void>;
 };
 const initial: Workspace = {
   configured: false,
   status: 'setup-required',
-  user: null,
-  member: null,
+  team: null,
   exercises: baseExercises,
   workouts: [],
   athletes: [],
@@ -59,20 +55,14 @@ const initial: Workspace = {
 export const useStore = create<Store>((set, get) => {
   function persistDevice() {
     const s = get();
-    if (s.user) set({ storageError: saveDevice(s.user.id, s.favorites, s.active) });
+    set({ storageError: saveDevice('shared', s.favorites, s.active) });
   }
   async function refresh() {
     set({ syncing: true });
     try {
       const data = workspaceSchema.parse(await api<Workspace>('workspace'));
-      const previousUser = get().user?.id;
-      const device = data.user && previousUser !== data.user.id ? readDevice(data.user.id) : null;
       set({
         ...data,
-        ...(device
-          ? { favorites: device.favorites, active: device.active, storageError: device.error }
-          : {}),
-        ...(!data.user ? { favorites: [], active: null } : {}),
         connectionError: undefined,
       });
     } catch (error) {
@@ -97,12 +87,18 @@ export const useStore = create<Store>((set, get) => {
     favorites: [],
     active: null,
     hydrate: async () => {
-      set({ preferences: readPreferences() });
+      const device = readDevice('shared');
+      set({
+        preferences: readPreferences(),
+        favorites: device.favorites,
+        active: device.active,
+        storageError: device.error,
+      });
       await refresh();
     },
     refresh,
     setPreferences: (p) => {
-      const prefs = { ...get().preferences, ...p, role: get().member?.role || 'athlete' };
+      const prefs = { ...get().preferences, ...p, role: 'athlete' as const };
       set({ preferences: prefs, storageError: savePreferences(prefs) });
     },
     toggleFavorite: (id) => {
@@ -123,8 +119,8 @@ export const useStore = create<Store>((set, get) => {
     deleteWorkout: async (id) => {
       await mutate('workouts', { id }, 'DELETE');
     },
-    saveSession: async (session) => {
-      await api('sessions', session);
+    saveSession: async (session, athleteId = null) => {
+      await api('sessions', { ...session, athleteId });
       set({ active: null });
       persistDevice();
       await refresh();
@@ -141,23 +137,6 @@ export const useStore = create<Store>((set, get) => {
     },
     deleteResult: async (id) => {
       await mutate('results', { id }, 'DELETE');
-    },
-    createInvite: async (athleteId, role) => {
-      const data = await api<{ token: string }>('team', { action: 'invite', athleteId, role });
-      return data.token;
-    },
-    logout: async () => {
-      await api('auth', { action: 'signout' });
-      const id = get().user?.id;
-      if (id) clearDevice(id);
-      set({
-        ...initial,
-        configured: get().configured,
-        status: 'signed-out',
-        favorites: [],
-        active: null,
-      });
-      await refresh();
     },
   };
 });

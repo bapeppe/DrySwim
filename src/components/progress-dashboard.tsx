@@ -1,4 +1,5 @@
 'use client';
+import { useState } from 'react';
 import { Check, Clock3, CalendarDays, TrendingUp, Waves } from 'lucide-react';
 import { SwimProgress } from './roster';
 import { AccessGate } from './access-gate';
@@ -6,8 +7,11 @@ import { useStore } from '@/state/store';
 import { categories } from '@/lib/models';
 import { localDateKey, weekDays } from '@/lib/workouts';
 export function ProgressDashboard() {
-  const { sessions, results, member } = useStore();
-  if (!member) return <AccessGate />;
+  const { sessions: allSessions, results: allResults, athletes, configured } = useStore();
+  const [athleteId, setAthleteId] = useState('');
+  const sessions = athleteId ? allSessions.filter((s) => s.athleteId === athleteId) : allSessions;
+  const results = athleteId ? allResults.filter((r) => r.athleteId === athleteId) : [];
+  if (!configured) return <AccessGate />;
   const done = sessions.filter((s) => s.completed);
   const days = weekDays(),
     keys = days.map(localDateKey);
@@ -32,11 +36,30 @@ export function ProgressDashboard() {
     <>
       <div className="page-heading">
         <div>
-          <h1>I tuoi progressi</h1>
-          <p>Ritrova gli allenamenti che hai fatto e salvato.</p>
+          <h1>Progressi della squadra</h1>
+          <p>Consulta le sessioni condivise o scegli un allievo per i suoi tempi.</p>
         </div>
       </div>
-      <SwimProgress results={results} />
+      <label className="panel form-panel">
+        Filtra per allievo
+        <select value={athleteId} onChange={(e) => setAthleteId(e.target.value)}>
+          <option value="">Tutte le sessioni della squadra</option>
+          {athletes.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.displayName}
+              {a.archived ? ' · archiviato' : ''}
+            </option>
+          ))}
+        </select>
+      </label>
+      {athleteId ? (
+        <SwimProgress results={results} />
+      ) : (
+        <p className="quiet-note">
+          Scegli un allievo per consultare i tempi in vasca. I confronti riguardano sempre la stessa
+          persona.
+        </p>
+      )}
       <div className="stat-grid">
         <div className="stat">
           <span className="stat-icon">
@@ -70,8 +93,8 @@ export function ProgressDashboard() {
         <div className="info-banner">
           <Waves size={25} />
           <p>
-            Dopo il primo allenamento completato, vedrai qui i tuoi progressi. Segui il tuo piano:
-            anche i giorni di riposo contano.
+            Dopo il primo allenamento completato, vedrai qui le sessioni salvate. Segui il tuo
+            piano: anche i giorni di riposo contano.
           </p>
         </div>
       )}
@@ -82,7 +105,7 @@ export function ProgressDashboard() {
             <div className="progress-grid">
               <section className="panel">
                 <div className="section-title">
-                  <h2>Il tuo ritmo nel tempo</h2>
+                  <h2>Il ritmo nel tempo</h2>
                   <TrendingUp size={20} />
                 </div>
                 <p className="muted">Sessioni completate · ultime 8 settimane</p>
@@ -162,7 +185,7 @@ export function ProgressDashboard() {
         </details>
       )}
       <div className="section-heading">
-        <h2>I tuoi allenamenti</h2>
+        <h2>Allenamenti salvati</h2>
         <span className="tag">{sessions.length} sessioni salvate</span>
       </div>
       {sessions.length ? (

@@ -50,7 +50,7 @@ export function ExerciseLibrary({ startAdding = false }: { startAdding?: boolean
     [equipment, setEquipment] = useState(''),
     [onlyFavorites, setOnlyFavorites] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  const { favorites, exercises, member } = useStore();
+  const { favorites, exercises, configured } = useStore();
   const [adding, setAdding] = useState(startAdding);
   const filtered = filterExercises(
     query,
@@ -78,7 +78,7 @@ export function ExerciseLibrary({ startAdding = false }: { startAdding?: boolean
           <p>Non conosci un movimento? Cerca qui come farlo.</p>
         </div>
       </div>
-      {member?.role === 'coach' && (
+      {configured && (
         <>
           <button className="btn btn-primary" onClick={() => setAdding(!adding)}>
             {adding ? 'Chiudi' : 'Aggiungi esercizio'}

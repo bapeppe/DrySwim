@@ -1,4 +1,4 @@
-/* Nessuna pagina account o risposta API viene messa in cache. */
+/* Nessun HTML di navigazione, allievo o risposta API viene messo in cache. */
 const CACHE = 'swimdryland-static-v3';
 const STATIC = ['/offline.html', '/icon.svg', '/icon-192.png', '/icon-512.png'];
 self.addEventListener('install', (event) => {

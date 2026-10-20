@@ -3,27 +3,33 @@ import { sessionSchema } from '@/lib/models';
 import { endpoint, json, payload, context, databaseError, HttpError } from '@/lib/server/http';
 export async function POST(request: Request) {
   return endpoint(async () => {
-    const { db, user, member, athlete } = await context();
+    const { db, team } = await context();
     const body = sessionSchema
-      .extend({ id: z.string().uuid(), workoutId: z.string().uuid() })
+      .extend({
+        id: z.string().uuid(),
+        workoutId: z.string().uuid(),
+        athleteId: z.string().uuid().nullable().default(null),
+      })
       .parse(await payload(request));
+    const { athleteId, ...document } = body;
     const { error } = await db.from('workout_sessions').insert({
       id: body.id,
-      team_id: member.team_id,
-      user_id: user.id,
-      athlete_id: athlete?.id || null,
+      team_id: team.id,
+      user_id: null,
+      athlete_id: athleteId,
       workout_id: body.workoutId,
-      document: body,
+      document,
     });
     if (error?.code === '23505') {
       const { data } = await db
         .from('workout_sessions')
-        .select('document')
+        .select('document,athlete_id')
         .eq('id', body.id)
-        .eq('user_id', user.id)
+        .eq('team_id', team.id)
         .maybeSingle();
       if (
         data &&
+        data.athlete_id === athleteId &&
         JSON.stringify(sessionSchema.parse(data.document)) ===
           JSON.stringify(sessionSchema.parse(body))
       )

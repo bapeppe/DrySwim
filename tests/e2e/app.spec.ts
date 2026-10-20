@@ -231,6 +231,112 @@ test('allenatore: crea esercizio, circuito, pubblica, riordina, duplica ed elimi
   await page.screenshot({ path: `test-results/coach-${info.project.name}.png`, fullPage: true });
   expect(state.workouts[0].published).toBe(true);
 });
+test('scheda personale: creazione dalla pagina allievo, bozza, modifica e pubblicazione', async ({
+  page,
+}, info) => {
+  const data = workspace();
+  data.athletes = [
+    { id: student, teamId: team, displayName: 'Luca', archived: false },
+    { id: user, teamId: team, displayName: 'Anna', archived: false },
+  ];
+  data.workouts = [
+    structuredClone(plan),
+    { ...structuredClone(plan), id: user, name: 'Scheda Anna', targetAthleteIds: [user] },
+  ];
+  const { state } = await server(page, data);
+  await load(page, '/allievi');
+  await page.getByRole('link', { name: /Luca/ }).click();
+  const personal = page.getByRole('region', { name: 'Schede personali' });
+  await expect(personal.locator('.workout-card')).toHaveCount(0);
+  await page.getByRole('link', { name: 'Aggiungi scheda allenamento' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Scheda per Luca');
+  await expect(page.getByText('Destinatario: solo Luca.', { exact: false })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Assegna a tutta la squadra' })).toHaveCount(0);
+  await page.getByLabel('Nome dell’allenamento', { exact: true }).fill('Palestra · Giorno A');
+  await page
+    .getByLabel('Descrizione', { exact: true })
+    .fill('Lunedì e giovedì: tecnica controllata e attrezzatura concordata con il coach.');
+  await expect(page.getByLabel('Numero di giri')).toHaveValue('1');
+  await page.getByLabel('Seleziona esercizio').selectOption('squat');
+  await page.getByRole('button', { name: 'Aggiungi', exact: true }).click();
+  await page.getByLabel('Serie', { exact: true }).fill('3');
+  await page.getByLabel('Ripetizioni', { exact: true }).fill('8');
+  await page.getByLabel('Recupero (sec)', { exact: true }).fill('90');
+  await page.getByRole('button', { name: 'Salva allenamento' }).click();
+  await expect(page.getByText('Bozza salvata.', { exact: true })).toBeVisible();
+  const saved = state.workouts.find((w) => w.name === 'Palestra · Giorno A')!;
+  expect(saved.targetAthleteIds).toEqual([student]);
+  expect(saved.published).toBe(false);
+  expect(saved.exercises[0]).toMatchObject({ sets: 3, restSeconds: 90, dose: { reps: 8 } });
+  await page.getByRole('link', { name: '← Scheda di Luca' }).click();
+  await expect(personal.locator('.workout-card')).toHaveCount(1);
+  await expect(personal).toContainText('Bozza');
+  await personal.locator('.workout-card').click();
+  await expect(page.getByRole('button', { name: 'Inizia allenamento', exact: true })).toHaveCount(
+    0,
+  );
+  await page.goto(`/allievi/${student}`);
+  await page.getByRole('link', { name: 'Modifica Palestra · Giorno A', exact: true }).click();
+  await expect(page.getByLabel('Serie', { exact: true })).toHaveValue('3');
+  await page.getByLabel('Pubblica per Luca', { exact: true }).check();
+  await page.getByRole('button', { name: 'Salva allenamento' }).click();
+  await expect(page.getByText('Allenamento pubblicato per gli atleti selezionati.')).toBeVisible();
+  expect(state.workouts.find((w) => w.id === saved.id)).toMatchObject({
+    published: true,
+    targetAthleteIds: [student],
+  });
+  expect(state.workouts.find((w) => w.id === workoutId)?.targetAthleteIds).toEqual([]);
+  expect(state.workouts.find((w) => w.id === user)?.targetAthleteIds).toEqual([user]);
+  await page.reload();
+  await expect(page.getByLabel('Nome dell’allenamento', { exact: true })).toHaveValue(
+    'Palestra · Giorno A',
+  );
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Nuovo', exact: true }).click();
+  await expect(page.getByLabel('Nome dell’allenamento', { exact: true })).toHaveValue('');
+  await expect(page.getByText('Destinatario: solo Luca.', { exact: false })).toBeVisible();
+  await expect(page.getByLabel('Pubblica per Luca', { exact: true })).not.toBeChecked();
+  await page.getByLabel('Nome dell’allenamento', { exact: true }).fill('Palestra · Giorno B');
+  await page.getByRole('button', { name: 'Aggiungi', exact: true }).click();
+  await page.getByRole('button', { name: 'Salva allenamento' }).click();
+  await expect(page.getByText('Bozza salvata.', { exact: true })).toBeVisible();
+  expect(state.workouts.find((w) => w.name === 'Palestra · Giorno B')?.targetAthleteIds).toEqual([
+    student,
+  ]);
+  await page.getByRole('link', { name: '← Scheda di Luca' }).click();
+  await expect(personal.locator('.workout-card')).toHaveCount(2);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({
+    path: `test-results/athlete-plans-${info.project.name}.png`,
+    fullPage: true,
+  });
+  await personal.locator('.workout-card').filter({ hasText: 'Palestra · Giorno A' }).click();
+  await expect(page.getByRole('button', { name: 'Inizia allenamento', exact: true })).toBeVisible();
+});
+test('schede personali: destinatario inesistente, archiviato o scheda estranea non diventano programmi di squadra', async ({
+  page,
+}) => {
+  const data = workspace();
+  data.athletes = [
+    { id: student, teamId: team, displayName: 'Luca', archived: true },
+    { id: user, teamId: team, displayName: 'Anna', archived: false },
+  ];
+  data.workouts = [structuredClone(plan)];
+  await server(page, data);
+  for (const path of [
+    `/allenatore?athlete=${student}`,
+    '/allenatore?athlete=inesistente',
+    `/allenatore?athlete=${user}&edit=${workoutId}`,
+  ]) {
+    await load(page, path);
+    await expect(
+      page.getByRole('heading', { name: 'Scheda personale non disponibile' }),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Salva allenamento' })).toHaveCount(0);
+  }
+  await page.goto(`/allievi/${student}`);
+  await expect(page.getByRole('link', { name: 'Aggiungi scheda allenamento' })).toHaveCount(0);
+});
 test('allievi e storico: 1.12 è un minuto e dodici secondi', async ({ page }, info) => {
   const { state } = await server(page, workspace());
   await load(page, '/allievi');

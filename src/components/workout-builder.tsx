@@ -18,12 +18,12 @@ import { teamWorkoutSchema, type TeamWorkout } from '@/lib/team-models';
 
 import { type Workout } from '@/lib/models';
 import { createWorkoutExercise, estimateWorkoutSeconds, exerciseMap } from '@/lib/workouts';
-const emptyWorkout = (): TeamWorkout => ({
+const emptyWorkout = (athleteId?: string): TeamWorkout => ({
   id: crypto.randomUUID(),
   published: false,
   name: '',
   description: '',
-  rounds: 2,
+  rounds: athleteId ? 1 : 2,
   roundRestSeconds: 75,
   warmupSeconds: 300,
   warmupInstructions:
@@ -32,14 +32,27 @@ const emptyWorkout = (): TeamWorkout => ({
   cooldownInstructions: 'Stretch leggero e respirazione tranquilla, senza forzare le posizioni.',
   exercises: [],
   custom: true,
-  targetAthleteIds: [],
+  targetAthleteIds: athleteId ? [athleteId] : [],
 });
-export function WorkoutBuilder({ editId, addId }: { editId?: string; addId?: string }) {
+export function WorkoutBuilder({
+  editId,
+  addId,
+  athleteId,
+}: {
+  editId?: string;
+  addId?: string;
+  athleteId?: string;
+}) {
   const { configured, exercises, athletes, workouts, saveWorkout, deleteWorkout } = useStore();
+  const athlete = athletes.find((a) => a.id === athleteId);
+  const personalWorkouts = workouts.filter(
+    (w) => w.targetAthleteIds.length === 1 && w.targetAthleteIds[0] === athleteId,
+  );
+  const visibleWorkouts = athleteId ? personalWorkouts : workouts;
   const exerciseById = exerciseMap(exercises);
   const [draft, setDraft] = useState<TeamWorkout>(() => {
     const found = workouts.find((w) => w.id === editId);
-    const w = found ? structuredClone(found) : emptyWorkout();
+    const w = found ? structuredClone(found) : emptyWorkout(athleteId);
     if (found && !found.custom) {
       w.id = crypto.randomUUID();
       w.name = `${w.name} · personalizzato`;
@@ -64,8 +77,23 @@ export function WorkoutBuilder({ editId, addId }: { editId?: string; addId?: str
   };
   const [busy, setBusy] = useState(false);
   if (!configured) return <AccessGate />;
+  if (
+    athleteId &&
+    (!athlete || athlete.archived || (editId && !personalWorkouts.some((w) => w.id === editId)))
+  )
+    return (
+      <div className="empty-state">
+        <h1>Scheda personale non disponibile</h1>
+        <p>Seleziona un allievo attivo e una sua scheda personale prima di continuare.</p>
+        <Link href="/allievi" className="btn btn-primary">
+          Torna agli allievi
+        </Link>
+      </div>
+    );
   async function save() {
-    const result = teamWorkoutSchema.safeParse(draft);
+    const result = teamWorkoutSchema.safeParse(
+      athleteId ? { ...draft, targetAthleteIds: [athleteId] } : draft,
+    );
     if (!result.success) {
       const labels: Record<string, string> = {
         name: 'Nome',
@@ -101,13 +129,23 @@ export function WorkoutBuilder({ editId, addId }: { editId?: string; addId?: str
   } catch {}
   return (
     <>
+      {athlete && (
+        <Link className="back-link" href={`/allievi/${athlete.id}`}>
+          ← Scheda di {athlete.displayName}
+        </Link>
+      )}
       <div className="page-heading">
         <div>
           <span className="eyebrow">SPAZIO ALLENATORE</span>
           <h1>
-            Dai forma all’allenamento<span className="teal">.</span>
+            {athlete ? `Scheda per ${athlete.displayName}` : 'Dai forma all’allenamento'}
+            <span className="teal">.</span>
           </h1>
-          <p>Adatta il programma al livello e alla giornata dei tuoi atleti.</p>
+          <p>
+            {athlete
+              ? 'Crea anche un piano per la palestra: indica giorni e obiettivi, poi scegli esercizi, serie, ripetizioni e recuperi.'
+              : 'Adatta il programma al livello e alla giornata dei tuoi atleti.'}
+          </p>
         </div>
         <button
           className="btn btn-secondary"
@@ -116,7 +154,7 @@ export function WorkoutBuilder({ editId, addId }: { editId?: string; addId?: str
               !draft.name ||
               window.confirm('Aprire un nuovo programma? Le modifiche non salvate andranno perse.')
             ) {
-              setDraft(emptyWorkout());
+              setDraft(emptyWorkout(athleteId));
               setError('');
               setMessage('');
             }
@@ -143,7 +181,9 @@ export function WorkoutBuilder({ editId, addId }: { editId?: string; addId?: str
                 maxLength={80}
                 value={draft.name}
                 onChange={(e) => patch({ name: e.target.value })}
-                placeholder="Es. Stabilità per il gruppo junior"
+                placeholder={
+                  athlete ? 'Es. Palestra · Giorno A' : 'Es. Stabilità per il gruppo junior'
+                }
               />
             </label>
             <label>
@@ -152,7 +192,11 @@ export function WorkoutBuilder({ editId, addId }: { editId?: string; addId?: str
                 maxLength={600}
                 value={draft.description}
                 onChange={(e) => patch({ description: e.target.value })}
-                placeholder="Obiettivo e indicazioni per gli atleti"
+                placeholder={
+                  athlete
+                    ? 'Giorni, obiettivo, attrezzatura e indicazioni personali dell’allenatore'
+                    : 'Obiettivo e indicazioni per gli atleti'
+                }
               />
             </label>
             <div className="form-grid">
@@ -177,54 +221,61 @@ export function WorkoutBuilder({ editId, addId }: { editId?: string; addId?: str
                 />
               </label>
             </div>
-            <details className="disclosure mt">
-              <summary>
-                Destinatari:{' '}
-                {draft.targetAthleteIds.length
-                  ? `${draft.targetAthleteIds.length} allievi selezionati`
-                  : 'tutta la squadra'}
-              </summary>
-              <p className="small muted">
-                Per un programma individuale scegli gli allievi. Senza selezioni, il programma è per
-                tutta la squadra.
+            {athlete ? (
+              <p className="info-banner mt">
+                Destinatario: solo {athlete.displayName}. La scheda resta consultabile nello spazio
+                condiviso.
               </p>
-              {athletes
-                .filter((a) => !a.archived)
-                .map((a) => (
-                  <label className="checkbox-label" key={a.id}>
-                    <input
-                      type="checkbox"
-                      checked={draft.targetAthleteIds.includes(a.id)}
-                      onChange={(e) =>
-                        patch({
-                          targetAthleteIds: e.target.checked
-                            ? [...draft.targetAthleteIds, a.id]
-                            : draft.targetAthleteIds.filter((id) => id !== a.id),
-                        })
-                      }
-                    />
-                    {a.displayName}
-                  </label>
-                ))}
-              {draft.targetAthleteIds.length > 0 && (
-                <button
-                  className="btn btn-secondary mt"
-                  onClick={() => patch({ targetAthleteIds: [] })}
-                >
-                  Assegna a tutta la squadra
-                </button>
-              )}
-              {!athletes.some((a) => !a.archived) && (
-                <p>Aggiungi gli allievi dal registro per assegnare programmi individuali.</p>
-              )}
-            </details>
+            ) : (
+              <details className="disclosure mt">
+                <summary>
+                  Destinatari:{' '}
+                  {draft.targetAthleteIds.length
+                    ? `${draft.targetAthleteIds.length} allievi selezionati`
+                    : 'tutta la squadra'}
+                </summary>
+                <p className="small muted">
+                  Per un programma individuale scegli gli allievi. Senza selezioni, il programma è
+                  per tutta la squadra.
+                </p>
+                {athletes
+                  .filter((a) => !a.archived)
+                  .map((a) => (
+                    <label className="checkbox-label" key={a.id}>
+                      <input
+                        type="checkbox"
+                        checked={draft.targetAthleteIds.includes(a.id)}
+                        onChange={(e) =>
+                          patch({
+                            targetAthleteIds: e.target.checked
+                              ? [...draft.targetAthleteIds, a.id]
+                              : draft.targetAthleteIds.filter((id) => id !== a.id),
+                          })
+                        }
+                      />
+                      {a.displayName}
+                    </label>
+                  ))}
+                {draft.targetAthleteIds.length > 0 && (
+                  <button
+                    className="btn btn-secondary mt"
+                    onClick={() => patch({ targetAthleteIds: [] })}
+                  >
+                    Assegna a tutta la squadra
+                  </button>
+                )}
+                {!athletes.some((a) => !a.archived) && (
+                  <p>Aggiungi gli allievi dal registro per assegnare programmi individuali.</p>
+                )}
+              </details>
+            )}
             <label className="checkbox-label">
               <input
                 type="checkbox"
                 checked={draft.published}
                 onChange={(e) => patch({ published: e.target.checked })}
               />
-              Pubblica per gli atleti
+              {athlete ? `Pubblica per ${athlete.displayName}` : 'Pubblica per gli atleti'}
             </label>
             <h3>Prima e dopo il circuito</h3>
             <div className="form-grid">
@@ -266,7 +317,7 @@ export function WorkoutBuilder({ editId, addId }: { editId?: string; addId?: str
           </section>
           <section className="panel form-panel mt">
             <div className="section-title">
-              <h2>Il circuito</h2>
+              <h2>{athlete ? 'Esercizi della scheda' : 'Il circuito'}</h2>
               <span className="tag">{draft.exercises.length} esercizi</span>
             </div>
             <p>
@@ -492,11 +543,11 @@ export function WorkoutBuilder({ editId, addId }: { editId?: string; addId?: str
             )}
           </section>
           <section className="panel mt">
-            <h3>I tuoi programmi</h3>
-            {workouts.length === 0 ? (
+            <h3>{athlete ? `Schede di ${athlete.displayName}` : 'I tuoi programmi'}</h3>
+            {visibleWorkouts.length === 0 ? (
               <p className="muted small">Nessun programma personalizzato salvato.</p>
             ) : (
-              workouts.map((w) => (
+              visibleWorkouts.map((w) => (
                 <div className="saved-workout" key={w.id}>
                   <strong>{w.name}</strong>
                   <div>
@@ -551,7 +602,7 @@ export function WorkoutBuilder({ editId, addId }: { editId?: string; addId?: str
                             );
                             return;
                           }
-                          if (draft.id === w.id) setDraft(emptyWorkout());
+                          if (draft.id === w.id) setDraft(emptyWorkout(athleteId));
                         }
                       }}
                     >
